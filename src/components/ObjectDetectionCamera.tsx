@@ -152,7 +152,7 @@ const ObjectDetectionCamera: React.FC = () => {
   const generateAlert = (detection: Detection): Alert | null => {
     const { class: className, distance, direction, score } = detection;
     
-    if (score < 0.5) return null;
+    if (score < 0.3) return null;
     
     let alertType: 'warning' | 'danger' | 'info' = 'info';
     let message = '';
@@ -203,10 +203,13 @@ const ObjectDetectionCamera: React.FC = () => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       try {
-        // Run object detection
+        // Run object detection with lower threshold
         const predictions = await modelRef.current.detect(video);
         
-        const currentDetections: Detection[] = predictions.map(prediction => {
+        // Filter predictions with lower threshold for better detection
+        const filteredPredictions = predictions.filter(prediction => prediction.score > 0.25);
+        
+        const currentDetections: Detection[] = filteredPredictions.map(prediction => {
           const distance = estimateDistance(prediction.bbox, prediction.class);
           const direction = getDirection(prediction.bbox, canvas.width);
           
@@ -235,32 +238,65 @@ const ObjectDetectionCamera: React.FC = () => {
         }
 
         // Draw bounding boxes and labels
-        ctx.strokeStyle = 'hsl(var(--detection-success))';
-        ctx.fillStyle = 'hsl(var(--detection-success))';
-        ctx.font = '16px Inter, system-ui, sans-serif';
-        ctx.lineWidth = 2;
-
         currentDetections.forEach(detection => {
           const [x, y, width, height] = detection.bbox;
           
-          // Draw bounding box
+          // Set colors based on confidence
+          const confidence = detection.score;
+          if (confidence > 0.7) {
+            ctx.strokeStyle = '#00ff00'; // Bright green for high confidence
+            ctx.fillStyle = '#00ff00';
+          } else if (confidence > 0.5) {
+            ctx.strokeStyle = '#ffff00'; // Yellow for medium confidence  
+            ctx.fillStyle = '#ffff00';
+          } else {
+            ctx.strokeStyle = '#ff6600'; // Orange for low confidence
+            ctx.fillStyle = '#ff6600';
+          }
+          
+          ctx.lineWidth = 3;
+          ctx.font = 'bold 18px Inter, system-ui, sans-serif';
+          
+          // Draw thick bounding box
           ctx.strokeRect(x, y, width, height);
           
-          // Draw label background
-          const label = `${detection.class} ${Math.round(detection.score * 100)}%`;
-          const labelWidth = ctx.measureText(label).width + 10;
-          ctx.fillStyle = 'hsl(var(--detection-success))';
-          ctx.fillRect(x, y - 25, labelWidth, 25);
+          // Draw semi-transparent filled corners for better visibility
+          ctx.globalAlpha = 0.3;
+          ctx.fillRect(x, y, 20, 20); // Top-left corner
+          ctx.fillRect(x + width - 20, y, 20, 20); // Top-right corner
+          ctx.fillRect(x, y + height - 20, 20, 20); // Bottom-left corner
+          ctx.fillRect(x + width - 20, y + height - 20, 20, 20); // Bottom-right corner
+          ctx.globalAlpha = 1.0;
+          
+          // Draw label with strong background
+          const label = `${detection.class.toUpperCase()} ${Math.round(detection.score * 100)}%`;
+          const labelWidth = ctx.measureText(label).width + 16;
+          const labelHeight = 30;
+          
+          // Draw label background with border
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          ctx.fillRect(x, y - labelHeight, labelWidth, labelHeight);
+          ctx.strokeStyle = confidence > 0.7 ? '#00ff00' : confidence > 0.5 ? '#ffff00' : '#ff6600';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y - labelHeight, labelWidth, labelHeight);
           
           // Draw label text
-          ctx.fillStyle = 'hsl(var(--detection-success-foreground))';
-          ctx.fillText(label, x + 5, y - 8);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(label, x + 8, y - 8);
           
-          // Draw distance and direction
+          // Draw distance and direction info
           if (detection.distance && detection.direction) {
-            const spatialInfo = `${detection.direction} ~${Math.round(detection.distance)}m`;
-            ctx.fillStyle = 'hsl(var(--detection-info))';
-            ctx.fillText(spatialInfo, x + 5, y + height + 20);
+            const spatialInfo = `${detection.direction.toUpperCase()} ~${Math.round(detection.distance)}m`;
+            const infoWidth = ctx.measureText(spatialInfo).width + 16;
+            
+            // Draw info background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(x, y + height + 5, infoWidth, 25);
+            
+            // Draw info text
+            ctx.fillStyle = '#00ccff';
+            ctx.font = 'bold 16px Inter, system-ui, sans-serif';
+            ctx.fillText(spatialInfo, x + 8, y + height + 22);
           }
         });
 
