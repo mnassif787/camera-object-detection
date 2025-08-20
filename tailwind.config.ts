@@ -52,6 +52,12 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				detection: {
+					success: 'hsl(var(--detection-success))',
+					warning: 'hsl(var(--detection-warning))',
+					danger: 'hsl(var(--detection-danger))',
+					info: 'hsl(var(--detection-info))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',

@@ -1,73 +1,142 @@
-# Welcome to your Lovable project
+# Object Detection PoC - Real-time Spatial Awareness
 
-## Project info
+A mobile proof-of-concept application that performs real-time object detection via the phone's camera, estimates distance and direction, and provides spatial alerts using only open-source tools.
 
-**URL**: https://lovable.dev/projects/db6c5374-057a-4b0e-a400-3fe639402b34
+## Features
 
-## How can I edit this code?
+🎯 **Real-time Object Detection** - Live camera feed with TensorFlow.js COCO-SSD model  
+📏 **Distance Estimation** - Calculates approximate distance based on object size  
+🧭 **Direction Detection** - Determines left/center/right positioning  
+🚨 **Spatial Alerts** - Real-time notifications like "person approaching from right ~25m"  
+📱 **Mobile Optimized** - Responsive design with Capacitor mobile integration  
+⚡ **High Performance** - Optimized for mobile devices with FPS monitoring  
 
-There are several ways of editing your application.
+## Technology Stack
 
-**Use Lovable**
+- **Frontend**: React + TypeScript + Vite
+- **UI**: Tailwind CSS + shadcn/ui components
+- **Object Detection**: TensorFlow.js + COCO-SSD model
+- **Mobile**: Capacitor for native capabilities
+- **Design**: Dark theme optimized for camera interfaces
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/db6c5374-057a-4b0e-a400-3fe639402b34) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Web Development
 
-**Use your preferred IDE**
+```bash
+# Install dependencies
+npm install
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Mobile Development
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+To run on physical device or emulator:
 
-**Use GitHub Codespaces**
+1. **Export to GitHub** via the "Export to Github" button
+2. **Clone and setup**:
+   ```bash
+   git clone <your-repo-url>
+   cd <project-name>
+   npm install
+   ```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+3. **Add mobile platforms**:
+   ```bash
+   # For iOS (requires macOS + Xcode)
+   npx cap add ios
+   npx cap update ios
+   
+   # For Android (requires Android Studio)
+   npx cap add android  
+   npx cap update android
+   ```
 
-## What technologies are used for this project?
+4. **Build and sync**:
+   ```bash
+   npm run build
+   npx cap sync
+   ```
 
-This project is built with:
+5. **Run on device**:
+   ```bash
+   # iOS (requires macOS + Xcode)
+   npx cap run ios
+   
+   # Android (requires Android Studio)
+   npx cap run android
+   ```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## How It Works
 
-## How can I deploy this project?
+### Object Detection
+- Uses TensorFlow.js with COCO-SSD model for real-time detection
+- Detects 80 different object classes (person, car, bicycle, etc.)
+- Runs entirely in the browser/webview
 
-Simply open [Lovable](https://lovable.dev/projects/db6c5374-057a-4b0e-a400-3fe639402b34) and click on Share -> Publish.
+### Distance Estimation
+- Calculates distance using object pixel height vs known real-world dimensions
+- Formula: `Distance = (Real Height × Focal Length) / Pixel Height`
+- Provides estimates between 1-200 meters
 
-## Can I connect a custom domain to my Lovable project?
+### Spatial Awareness
+- Determines object direction based on bounding box position
+- Generates contextual alerts: "person very close on the left (~8m)"
+- Alert severity based on proximity (danger < 10m, warning < 25m)
 
-Yes, you can!
+### Performance
+- Real-time FPS monitoring
+- Optimized canvas rendering
+- Mobile-first responsive design
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Camera Permissions
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+The app requires camera access. On mobile devices:
+- **iOS**: Permissions handled automatically via Capacitor
+- **Android**: Permissions handled automatically via Capacitor
+- **Web**: Browser will prompt for camera access
+
+## Model Details
+
+- **Model**: COCO-SSD (Common Objects in Context - Single Shot Detection)
+- **Classes**: 80 different object types
+- **Accuracy**: Optimized for mobile performance vs accuracy balance
+- **Size**: ~27MB download (cached after first load)
+
+## Troubleshooting
+
+### Camera Not Working
+- Check browser/app permissions
+- Ensure HTTPS (required for camera access)
+- Try different browsers if on web
+
+### Low Performance
+- Reduce video resolution in camera constraints
+- Ensure good lighting conditions
+- Close other apps on mobile device
+
+### Model Loading Issues
+- Check internet connection (required for first load)
+- Clear browser cache if issues persist
+- Check console for TensorFlow.js errors
+
+## Development Notes
+
+- Hot reload enabled for mobile development via Capacitor server config
+- All colors use semantic tokens from design system
+- Responsive design works across all screen sizes
+- Built-in error handling and user feedback
+
+## Future Enhancements
+
+- Custom model training with TensorFlow Lite Model Maker
+- Depth estimation using dual cameras
+- Audio alerts for accessibility
+- Recording and playback of detection sessions
+- Integration with device sensors (accelerometer, compass)
+
+---
+
+Built with ❤️ using Lovable and open-source technologies.
