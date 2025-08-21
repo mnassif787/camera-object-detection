@@ -42,10 +42,13 @@ const ObjectDetectionCamera: React.FC = () => {
   useEffect(() => {
     const initializeTensorFlow = async () => {
       try {
+        console.log('Starting TensorFlow.js initialization...');
         await tf.ready();
-        console.log('TensorFlow.js initialized');
+        console.log('TensorFlow.js initialized successfully');
         
+        console.log('Loading COCO-SSD model...');
         const model = await cocoSsd.load();
+        console.log('COCO-SSD model loaded successfully:', model);
         modelRef.current = model;
         setModelLoaded(true);
         setIsLoading(false);
@@ -70,6 +73,7 @@ const ObjectDetectionCamera: React.FC = () => {
   // Start camera
   const startCamera = useCallback(async () => {
     try {
+      console.log('Starting camera...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -78,12 +82,14 @@ const ObjectDetectionCamera: React.FC = () => {
           frameRate: { ideal: 30, max: 30 }
         }
       });
+      console.log('Camera stream obtained:', stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
         videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded, starting detection...');
           if (videoRef.current) {
             videoRef.current.play();
             setIsDetecting(true);
@@ -178,13 +184,21 @@ const ObjectDetectionCamera: React.FC = () => {
 
   // Main detection loop with optimized performance
   const startDetection = useCallback(() => {
+    console.log('startDetection called, isDetecting:', isDetecting);
     let lastTime = Date.now();
     let frameCount = 0;
     let lastDetectionTime = 0;
     const detectionInterval = 100; // Detect every 100ms for smooth performance
+    let currentDetections: Detection[] = [];
 
     const detect = async () => {
       if (!videoRef.current || !canvasRef.current || !modelRef.current || !isDetecting) {
+        console.log('Detection early return:', {
+          video: !!videoRef.current,
+          canvas: !!canvasRef.current, 
+          model: !!modelRef.current,
+          isDetecting
+        });
         return;
       }
 
@@ -194,6 +208,7 @@ const ObjectDetectionCamera: React.FC = () => {
       const currentTime = Date.now();
 
       if (!ctx || video.videoWidth === 0) {
+        console.log('Waiting for video or context:', { ctx: !!ctx, videoWidth: video.videoWidth });
         animationRef.current = requestAnimationFrame(detect);
         return;
       }
@@ -202,6 +217,7 @@ const ObjectDetectionCamera: React.FC = () => {
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+        console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
       }
 
       // Clear canvas and draw video frame
@@ -210,12 +226,15 @@ const ObjectDetectionCamera: React.FC = () => {
       try {
         // Run object detection at controlled intervals
         if (currentTime - lastDetectionTime >= detectionInterval) {
+          console.log('Running detection...');
           const predictions = await modelRef.current.detect(video);
+          console.log('Predictions received:', predictions.length, predictions);
           
           // Filter predictions with threshold for better detection
           const filteredPredictions = predictions.filter(prediction => prediction.score > 0.25);
+          console.log('Filtered predictions:', filteredPredictions.length);
           
-          const currentDetections: Detection[] = filteredPredictions.map(prediction => {
+          currentDetections = filteredPredictions.map(prediction => {
             const distance = estimateDistance(prediction.bbox, prediction.class);
             const direction = getDirection(prediction.bbox, canvas.width);
             
@@ -228,13 +247,9 @@ const ObjectDetectionCamera: React.FC = () => {
             };
           });
 
-          // Update detections state efficiently
-          setDetections(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(currentDetections)) {
-              return currentDetections;
-            }
-            return prev;
-          });
+          // Update detections state
+          setDetections(currentDetections);
+          console.log('Updated detections:', currentDetections);
 
           // Generate alerts for high-confidence detections
           const newAlerts: Alert[] = [];
@@ -253,7 +268,7 @@ const ObjectDetectionCamera: React.FC = () => {
         }
 
         // Always draw the current detections for smooth visualization
-        detections.forEach(detection => {
+        currentDetections.forEach(detection => {
           const [x, y, width, height] = detection.bbox;
           
           // Set colors based on confidence
@@ -331,8 +346,9 @@ const ObjectDetectionCamera: React.FC = () => {
       animationRef.current = requestAnimationFrame(detect);
     };
 
+    console.log('Starting detection loop...');
     detect();
-  }, [isDetecting, detections]);
+  }, [isDetecting]);
 
   // Cleanup on unmount
   useEffect(() => {
