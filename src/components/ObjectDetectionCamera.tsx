@@ -73,8 +73,9 @@ const ObjectDetectionCamera: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 640, max: 640 },
+          height: { ideal: 480, max: 480 },
+          frameRate: { ideal: 30, max: 30 }
         }
       });
 
@@ -175,10 +176,12 @@ const ObjectDetectionCamera: React.FC = () => {
     };
   };
 
-  // Main detection loop
+  // Main detection loop with optimized performance
   const startDetection = useCallback(() => {
     let lastTime = Date.now();
     let frameCount = 0;
+    let lastDetectionTime = 0;
+    const detectionInterval = 100; // Detect every 100ms for smooth performance
 
     const detect = async () => {
       if (!videoRef.current || !canvasRef.current || !modelRef.current || !isDetecting) {
@@ -188,72 +191,85 @@ const ObjectDetectionCamera: React.FC = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
+      const currentTime = Date.now();
 
       if (!ctx || video.videoWidth === 0) {
         animationRef.current = requestAnimationFrame(detect);
         return;
       }
 
-      // Set canvas size to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Set canvas size to match video (only if changed)
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
 
       // Clear canvas and draw video frame
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       try {
-        // Run object detection with lower threshold
-        const predictions = await modelRef.current.detect(video);
-        
-        // Filter predictions with lower threshold for better detection
-        const filteredPredictions = predictions.filter(prediction => prediction.score > 0.25);
-        
-        const currentDetections: Detection[] = filteredPredictions.map(prediction => {
-          const distance = estimateDistance(prediction.bbox, prediction.class);
-          const direction = getDirection(prediction.bbox, canvas.width);
+        // Run object detection at controlled intervals
+        if (currentTime - lastDetectionTime >= detectionInterval) {
+          const predictions = await modelRef.current.detect(video);
           
-          return {
-            bbox: prediction.bbox,
-            class: prediction.class,
-            score: prediction.score,
-            distance,
-            direction
-          };
-        });
+          // Filter predictions with threshold for better detection
+          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.25);
+          
+          const currentDetections: Detection[] = filteredPredictions.map(prediction => {
+            const distance = estimateDistance(prediction.bbox, prediction.class);
+            const direction = getDirection(prediction.bbox, canvas.width);
+            
+            return {
+              bbox: prediction.bbox,
+              class: prediction.class,
+              score: prediction.score,
+              distance,
+              direction
+            };
+          });
 
-        setDetections(currentDetections);
+          // Update detections state efficiently
+          setDetections(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(currentDetections)) {
+              return currentDetections;
+            }
+            return prev;
+          });
 
-        // Generate alerts for high-confidence detections
-        const newAlerts: Alert[] = [];
-        currentDetections.forEach(detection => {
-          const alert = generateAlert(detection);
-          if (alert) {
-            newAlerts.push(alert);
+          // Generate alerts for high-confidence detections
+          const newAlerts: Alert[] = [];
+          currentDetections.forEach(detection => {
+            const alert = generateAlert(detection);
+            if (alert) {
+              newAlerts.push(alert);
+            }
+          });
+
+          if (newAlerts.length > 0) {
+            setAlerts(prev => [...newAlerts, ...prev].slice(0, 5)); // Keep last 5 alerts
           }
-        });
 
-        if (newAlerts.length > 0) {
-          setAlerts(prev => [...newAlerts, ...prev].slice(0, 5)); // Keep last 5 alerts
+          lastDetectionTime = currentTime;
         }
 
-        // Draw bounding boxes and labels
-        currentDetections.forEach(detection => {
+        // Always draw the current detections for smooth visualization
+        detections.forEach(detection => {
           const [x, y, width, height] = detection.bbox;
           
           // Set colors based on confidence
           const confidence = detection.score;
+          let strokeColor, fillColor;
+          
           if (confidence > 0.7) {
-            ctx.strokeStyle = '#00ff00'; // Bright green for high confidence
-            ctx.fillStyle = '#00ff00';
+            strokeColor = fillColor = '#00ff00'; // Bright green for high confidence
           } else if (confidence > 0.5) {
-            ctx.strokeStyle = '#ffff00'; // Yellow for medium confidence  
-            ctx.fillStyle = '#ffff00';
+            strokeColor = fillColor = '#ffff00'; // Yellow for medium confidence  
           } else {
-            ctx.strokeStyle = '#ff6600'; // Orange for low confidence
-            ctx.fillStyle = '#ff6600';
+            strokeColor = fillColor = '#ff6600'; // Orange for low confidence
           }
           
+          ctx.strokeStyle = strokeColor;
+          ctx.fillStyle = fillColor;
           ctx.lineWidth = 3;
           ctx.font = 'bold 18px Inter, system-ui, sans-serif';
           
@@ -276,7 +292,7 @@ const ObjectDetectionCamera: React.FC = () => {
           // Draw label background with border
           ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
           ctx.fillRect(x, y - labelHeight, labelWidth, labelHeight);
-          ctx.strokeStyle = confidence > 0.7 ? '#00ff00' : confidence > 0.5 ? '#ffff00' : '#ff6600';
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = 2;
           ctx.strokeRect(x, y - labelHeight, labelWidth, labelHeight);
           
@@ -306,7 +322,6 @@ const ObjectDetectionCamera: React.FC = () => {
 
       // Calculate FPS
       frameCount++;
-      const currentTime = Date.now();
       if (currentTime - lastTime >= 1000) {
         setFps(frameCount);
         frameCount = 0;
@@ -317,7 +332,7 @@ const ObjectDetectionCamera: React.FC = () => {
     };
 
     detect();
-  }, [isDetecting]);
+  }, [isDetecting, detections]);
 
   // Cleanup on unmount
   useEffect(() => {
