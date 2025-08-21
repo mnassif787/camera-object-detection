@@ -184,21 +184,30 @@ const ObjectDetectionCamera: React.FC = () => {
 
   // Main detection loop with optimized performance
   const startDetection = useCallback(() => {
-    console.log('startDetection called, isDetecting:', isDetecting);
+    console.log('🎯 startDetection called, isDetecting:', isDetecting);
+    if (!isDetecting) {
+      console.log('❌ Detection not enabled, returning');
+      return;
+    }
+
     let lastTime = Date.now();
     let frameCount = 0;
     let lastDetectionTime = 0;
-    const detectionInterval = 100; // Detect every 100ms for smooth performance
+    const detectionInterval = 200; // Slower for debugging
     let currentDetections: Detection[] = [];
 
     const detect = async () => {
-      if (!videoRef.current || !canvasRef.current || !modelRef.current || !isDetecting) {
-        console.log('Detection early return:', {
+      console.log('🔄 Detect function called');
+      
+      if (!videoRef.current || !canvasRef.current || !modelRef.current) {
+        console.log('❌ Missing refs:', {
           video: !!videoRef.current,
           canvas: !!canvasRef.current, 
           model: !!modelRef.current,
-          isDetecting
         });
+        if (isDetecting) {
+          animationRef.current = requestAnimationFrame(detect);
+        }
         return;
       }
 
@@ -207,32 +216,51 @@ const ObjectDetectionCamera: React.FC = () => {
       const ctx = canvas.getContext('2d');
       const currentTime = Date.now();
 
-      if (!ctx || video.videoWidth === 0) {
-        console.log('Waiting for video or context:', { ctx: !!ctx, videoWidth: video.videoWidth });
-        animationRef.current = requestAnimationFrame(detect);
+      if (!ctx) {
+        console.log('❌ No canvas context');
+        if (isDetecting) {
+          animationRef.current = requestAnimationFrame(detect);
+        }
         return;
       }
 
-      // Set canvas size to match video (only if changed)
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log('⏳ Waiting for video dimensions:', { 
+          width: video.videoWidth, 
+          height: video.videoHeight,
+          readyState: video.readyState
+        });
+        if (isDetecting) {
+          animationRef.current = requestAnimationFrame(detect);
+        }
+        return;
+      }
+
+      // Set canvas size to match video
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
+        console.log('📐 Canvas resized to:', canvas.width, 'x', canvas.height);
       }
 
-      // Clear canvas and draw video frame
+      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       try {
         // Run object detection at controlled intervals
         if (currentTime - lastDetectionTime >= detectionInterval) {
-          console.log('Running detection...');
-          const predictions = await modelRef.current.detect(video);
-          console.log('Predictions received:', predictions.length, predictions);
+          console.log('🔍 Running detection on video...');
           
-          // Filter predictions with threshold for better detection
-          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.25);
-          console.log('Filtered predictions:', filteredPredictions.length);
+          const predictions = await modelRef.current.detect(video);
+          console.log('🎯 Raw predictions:', predictions.length, predictions.map(p => `${p.class}:${Math.round(p.score*100)}%`));
+          
+          // Lower threshold for testing
+          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.2);
+          console.log('✅ Filtered predictions:', filteredPredictions.length);
+          
+          if (filteredPredictions.length > 0) {
+            console.log('🎉 OBJECTS DETECTED!', filteredPredictions.map(p => p.class));
+          }
           
           currentDetections = filteredPredictions.map(prediction => {
             const distance = estimateDistance(prediction.bbox, prediction.class);
@@ -249,104 +277,72 @@ const ObjectDetectionCamera: React.FC = () => {
 
           // Update detections state
           setDetections(currentDetections);
-          console.log('Updated detections:', currentDetections);
-
-          // Generate alerts for high-confidence detections
-          const newAlerts: Alert[] = [];
-          currentDetections.forEach(detection => {
-            const alert = generateAlert(detection);
-            if (alert) {
-              newAlerts.push(alert);
-            }
-          });
-
-          if (newAlerts.length > 0) {
-            setAlerts(prev => [...newAlerts, ...prev].slice(0, 5)); // Keep last 5 alerts
-          }
-
+          
           lastDetectionTime = currentTime;
         }
 
-        // Always draw the current detections for smooth visualization
-        currentDetections.forEach(detection => {
+        // Always draw the current detections
+        if (currentDetections.length > 0) {
+          console.log('🎨 Drawing', currentDetections.length, 'detections');
+        }
+        
+        currentDetections.forEach((detection, index) => {
           const [x, y, width, height] = detection.bbox;
+          console.log(`🎨 Drawing detection ${index}:`, detection.class, 'at', [x, y, width, height]);
           
-          // Set colors based on confidence
-          const confidence = detection.score;
-          let strokeColor, fillColor;
+          // Bright, highly visible colors
+          ctx.strokeStyle = '#00FF00'; // Bright green
+          ctx.fillStyle = '#00FF00';
+          ctx.lineWidth = 4; // Thicker lines
+          ctx.font = 'bold 20px Arial';
           
-          if (confidence > 0.7) {
-            strokeColor = fillColor = '#00ff00'; // Bright green for high confidence
-          } else if (confidence > 0.5) {
-            strokeColor = fillColor = '#ffff00'; // Yellow for medium confidence  
-          } else {
-            strokeColor = fillColor = '#ff6600'; // Orange for low confidence
-          }
-          
-          ctx.strokeStyle = strokeColor;
-          ctx.fillStyle = fillColor;
-          ctx.lineWidth = 3;
-          ctx.font = 'bold 18px Inter, system-ui, sans-serif';
-          
-          // Draw thick bounding box
+          // Draw bounding box
           ctx.strokeRect(x, y, width, height);
+          console.log(`✏️ Drew bounding box at [${x}, ${y}, ${width}, ${height}]`);
           
-          // Draw semi-transparent filled corners for better visibility
-          ctx.globalAlpha = 0.3;
-          ctx.fillRect(x, y, 20, 20); // Top-left corner
-          ctx.fillRect(x + width - 20, y, 20, 20); // Top-right corner
-          ctx.fillRect(x, y + height - 20, 20, 20); // Bottom-left corner
-          ctx.fillRect(x + width - 20, y + height - 20, 20, 20); // Bottom-right corner
-          ctx.globalAlpha = 1.0;
-          
-          // Draw label with strong background
+          // Draw label background
           const label = `${detection.class.toUpperCase()} ${Math.round(detection.score * 100)}%`;
-          const labelWidth = ctx.measureText(label).width + 16;
+          const metrics = ctx.measureText(label);
+          const labelWidth = metrics.width + 20;
           const labelHeight = 30;
           
-          // Draw label background with border
+          // Black background for label
           ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
           ctx.fillRect(x, y - labelHeight, labelWidth, labelHeight);
-          ctx.strokeStyle = strokeColor;
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y - labelHeight, labelWidth, labelHeight);
           
-          // Draw label text
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(label, x + 8, y - 8);
-          
-          // Draw distance and direction info
-          if (detection.distance && detection.direction) {
-            const spatialInfo = `${detection.direction.toUpperCase()} ~${Math.round(detection.distance)}m`;
-            const infoWidth = ctx.measureText(spatialInfo).width + 16;
-            
-            // Draw info background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(x, y + height + 5, infoWidth, 25);
-            
-            // Draw info text
-            ctx.fillStyle = '#00ccff';
-            ctx.font = 'bold 16px Inter, system-ui, sans-serif';
-            ctx.fillText(spatialInfo, x + 8, y + height + 22);
-          }
+          // White text for label
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(label, x + 10, y - 8);
+          console.log(`✏️ Drew label "${label}" at [${x + 10}, ${y - 8}]`);
         });
 
+        // Draw a test rectangle to verify canvas is working
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(10, 10, 100, 50);
+        ctx.fillStyle = '#FF0000';
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText('TEST', 15, 30);
+
       } catch (error) {
-        console.error('Detection error:', error);
+        console.error('❌ Detection error:', error);
       }
 
       // Calculate FPS
       frameCount++;
       if (currentTime - lastTime >= 1000) {
         setFps(frameCount);
+        console.log('📊 FPS:', frameCount);
         frameCount = 0;
         lastTime = currentTime;
       }
 
-      animationRef.current = requestAnimationFrame(detect);
+      if (isDetecting) {
+        animationRef.current = requestAnimationFrame(detect);
+      }
     };
 
-    console.log('Starting detection loop...');
+    console.log('🚀 Starting detection loop...');
     detect();
   }, [isDetecting]);
 
