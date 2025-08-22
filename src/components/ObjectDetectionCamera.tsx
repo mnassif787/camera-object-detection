@@ -200,35 +200,38 @@ const ObjectDetectionCamera: React.FC = () => {
     if (!speechEnabled || !window.speechSynthesis) return;
     
     const now = Date.now();
-    const objectKey = detection.class;
+    const objectKey = `${detection.class}-${detection.direction}`;
     const timeSinceLastSpoken = now - (lastSpokenTime[objectKey] || 0);
     
-    // Only speak once every 3 seconds per object to avoid spam
-    if (timeSinceLastSpoken < 3000) return;
+    // Reduced cooldown to 800ms and made it position-specific for faster response
+    if (timeSinceLastSpoken < 800) return;
+    
+    // Cancel any ongoing speech for immediate response
+    window.speechSynthesis.cancel();
     
     const distance = Math.round(detection.distance || 0);
     const direction = detection.direction;
     
-    // Create natural speech message
+    // Create shorter, more responsive speech messages
     let message = '';
     if (distance < 2) {
-      message = `${detection.class} very close, ${direction} side`;
+      message = `${detection.class}, ${direction}, very close`;
     } else if (distance < 5) {
-      message = `${detection.class} nearby, ${direction} side, ${distance} meters`;
+      message = `${detection.class}, ${direction}, ${distance} meters`;
     } else {
-      message = `${detection.class} detected, ${direction} side, ${distance} meters away`;
+      message = `${detection.class}, ${direction}, ${distance} meters`;
     }
     
-    // Create and configure speech
+    // Create and configure speech for faster delivery
     const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = 1.1;
+    utterance.rate = 1.5; // Faster speech rate
     utterance.pitch = 1.0;
-    utterance.volume = 0.8;
+    utterance.volume = 0.9;
     
     // Speak the message
     window.speechSynthesis.speak(utterance);
     
-    // Update last spoken time
+    // Update last spoken time with position-specific key
     setLastSpokenTime(prev => ({
       ...prev,
       [objectKey]: now
@@ -271,7 +274,7 @@ const ObjectDetectionCamera: React.FC = () => {
     let lastTime = Date.now();
     let frameCount = 0;
     let lastDetectionTime = 0;
-    const detectionInterval = 200; // Slower for debugging
+    const detectionInterval = 100; // Faster for real-time response
     let currentDetections: Detection[] = [];
 
     const detect = async () => {
