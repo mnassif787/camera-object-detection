@@ -541,21 +541,125 @@ const ObjectDetectionCamera: React.FC = () => {
           ctx.strokeRect(x, y, width, height);
           console.log(`✏️ Drew bounding box at [${x}, ${y}, ${width}, ${height}]`);
           
-          // Draw label background
-          const label = `${trackedObject.class.toUpperCase()} ${Math.round(trackedObject.confidence * 100)}%`;
-          const metrics = ctx.measureText(label);
-          const labelWidth = metrics.width + 20;
-          const labelHeight = 30;
+          // Draw comprehensive object information directly on canvas
+          const distance = Math.round(trackedObject.distance || 0);
+          const confidence = Math.round(trackedObject.confidence * 100);
+          const direction = trackedObject.direction;
+          const frameCount = trackedObject.frameCount;
           
-          // Black background for label
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          ctx.fillRect(x, y - labelHeight, labelWidth, labelHeight);
+          // Create detailed label with multiple lines
+          const labelLines = [
+            `${trackedObject.class.toUpperCase()}`,
+            `${distance}m ${direction}`,
+            `${confidence}% (${frameCount}f)`,
+            trackedObject.focused ? 'FOCUSED' : 'Tracked'
+          ];
           
-          // White text for label
+          // Calculate label dimensions
+          ctx.font = 'bold 16px Arial';
+          const lineHeight = 20;
+          const labelWidth = Math.max(...labelLines.map(line => ctx.measureText(line).width)) + 20;
+          const labelHeight = labelLines.length * lineHeight + 10;
+          
+          // Position label above the object
+          let labelX = x;
+          let labelY = y - labelHeight - 10;
+          
+          // Adjust label position if it goes off-screen
+          if (labelY < 0) {
+            labelY = y + height + 10; // Put label below object
+          }
+          if (labelX + labelWidth > canvas.width) {
+            labelX = canvas.width - labelWidth - 5; // Adjust for right edge
+          }
+          
+          // Draw label background with semi-transparency
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+          
+          // Draw label border
+          ctx.strokeStyle = trackedObject.focused ? '#FFD700' : '#00FF00';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
+          
+          // Draw label text
           ctx.fillStyle = '#FFFFFF';
-          ctx.fillText(label, x + 10, y - 8);
+          labelLines.forEach((line, lineIndex) => {
+            const lineY = labelY + 15 + (lineIndex * lineHeight);
+            ctx.fillText(line, labelX + 10, lineY);
+          });
           
-          // Add focus button for each object
+          // Draw distance indicator line from object to label
+          ctx.strokeStyle = trackedObject.focused ? '#FFD700' : '#00FF00';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]); // Dashed line
+          ctx.beginPath();
+          ctx.moveTo(x + width/2, y);
+          ctx.lineTo(labelX + labelWidth/2, labelY + labelHeight);
+          ctx.stroke();
+          ctx.setLineDash([]); // Reset to solid lines
+          
+          // Draw object center point
+          ctx.fillStyle = trackedObject.focused ? '#FFD700' : '#00FF00';
+          ctx.beginPath();
+          ctx.arc(x + width/2, y + height/2, 4, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          // Draw confidence indicator bar
+          const barWidth = 60;
+          const barHeight = 6;
+          const barX = x + width/2 - barWidth/2;
+          const barY = y - 5;
+          
+          // Background bar
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.fillRect(barX, barY, barWidth, barHeight);
+          
+          // Confidence fill
+          const confidenceWidth = (confidence / 100) * barWidth;
+          if (confidence >= 80) {
+            ctx.fillStyle = '#00FF00'; // Green for high confidence
+          } else if (confidence >= 60) {
+            ctx.fillStyle = '#FFFF00'; // Yellow for medium confidence
+          } else {
+            ctx.fillStyle = '#FF0000'; // Red for low confidence
+          }
+          ctx.fillRect(barX, barY, confidenceWidth, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(barX, barY, barWidth, barHeight);
+          
+          // Draw direction indicator arrow
+          const arrowSize = 15;
+          const arrowX = x + width/2;
+          const arrowY = y + height + 15;
+          
+          ctx.strokeStyle = trackedObject.focused ? '#FFD700' : '#00FF00';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          
+          if (direction === 'left') {
+            ctx.moveTo(arrowX, arrowY);
+            ctx.lineTo(arrowX - arrowSize, arrowY);
+            ctx.lineTo(arrowX - arrowSize + 5, arrowY - 5);
+            ctx.moveTo(arrowX - arrowSize, arrowY);
+            ctx.lineTo(arrowX - arrowSize + 5, arrowY + 5);
+          } else if (direction === 'right') {
+            ctx.moveTo(arrowX, arrowY);
+            ctx.lineTo(arrowX + arrowSize, arrowY);
+            ctx.lineTo(arrowX + arrowSize - 5, arrowY - 5);
+            ctx.moveTo(arrowX + arrowSize, arrowY);
+            ctx.lineTo(arrowX + arrowSize - 5, arrowY + 5);
+          } else { // center
+            ctx.moveTo(arrowX - arrowSize/2, arrowY);
+            ctx.lineTo(arrowX + arrowSize/2, arrowY);
+            ctx.lineTo(arrowX, arrowY - 5);
+          }
+          ctx.stroke();
+          
+          // Add focus button for each object (only when not in focus mode)
           if (!focusMode) {
             const buttonWidth = 80;
             const buttonHeight = 25;
@@ -566,13 +670,18 @@ const ObjectDetectionCamera: React.FC = () => {
             ctx.fillStyle = 'rgba(0, 123, 255, 0.9)';
             ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
             
+            // Button border
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
             // Button text
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 12px Arial';
             ctx.fillText('FOCUS', buttonX + 20, buttonY + 17);
           }
           
-          console.log(`✏️ Drew label "${label}" at [${x + 10}, ${y - 8}]`);
+          console.log(`✏️ Drew detailed label for ${trackedObject.class} at [${labelX}, ${labelY}]`);
         });
 
       } catch (error) {
