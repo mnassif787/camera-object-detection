@@ -261,7 +261,7 @@ const ObjectDetectionCamera: React.FC = () => {
           confidence: Math.min(1, bestMatch.confidence + 0.1),
           lastSeen: now,
           frameCount: bestMatch.frameCount + 1,
-          stable: bestMatch.frameCount >= 3, // Object is stable after 3 frames
+          stable: bestMatch.frameCount >= 2, // Object is stable after 2 frames instead of 3
         };
         updatedTracked.push(updated);
         
@@ -466,7 +466,7 @@ const ObjectDetectionCamera: React.FC = () => {
           console.log('🎯 Raw predictions:', predictions.length, predictions.map(p => `${p.class}:${Math.round(p.score*100)}%`));
           
           // Higher threshold for more stable detection
-          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.4);
+          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.2);
           console.log('✅ Filtered predictions:', filteredPredictions.length);
           
           if (filteredPredictions.length > 0) {
@@ -516,11 +516,19 @@ const ObjectDetectionCamera: React.FC = () => {
         // Draw tracked objects with enhanced visualization
         const objectsToDraw = focusMode 
           ? trackedObjects.filter(obj => obj.focused)
-          : trackedObjects.filter(obj => obj.stable && obj.confidence > 0.5);
+          : trackedObjects.filter(obj => obj.stable && obj.confidence > 0.3);
         
         if (objectsToDraw.length > 0) {
           console.log('🎨 Drawing', objectsToDraw.length, 'tracked objects');
         }
+        
+        // Draw debug info to verify canvas is working
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 3;
+        ctx.font = 'bold 20px Arial';
+        ctx.fillStyle = '#FF0000';
+        ctx.fillText(`Objects: ${objectsToDraw.length} | Total: ${trackedObjects.length}`, 10, 30);
+        ctx.strokeRect(10, 40, 200, 30);
         
         objectsToDraw.forEach((trackedObject, index) => {
           const [x, y, width, height] = trackedObject.bbox;
