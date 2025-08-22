@@ -741,31 +741,220 @@ const ObjectDetectionCamera: React.FC = () => {
         </div>
       )}
 
-      {/* Alert Panel */}
-      {alerts.length > 0 && (
-        <div className="p-4 bg-card border-b border-border">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="w-4 h-4 text-destructive" />
-            <span className="font-medium">Spatial Alerts</span>
-          </div>
-          <div className="space-y-2">
-            {alerts.slice(0, 3).map(alert => (
-              <div
-                key={alert.id}
-                className={`p-2 rounded-lg text-sm ${
-                  alert.type === 'danger' 
-                    ? 'bg-destructive/10 text-destructive border border-destructive/20'
-                    : alert.type === 'warning'
-                    ? 'bg-accent/10 text-accent-foreground border border-accent/20'
-                    : 'bg-detection-info/10 text-detection-info border border-detection-info/20'
-                }`}
-              >
-                {alert.message}
+      {/* Enhanced Alert Panel */}
+      <div className="p-4 bg-card border-b border-border">
+        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          Situational Awareness ({alerts.length} alerts)
+        </h3>
+        
+        {/* Real-time Object Status */}
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="font-medium text-blue-800 mb-2">Current Environment Status</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {trackedObjects.filter(obj => obj.stable && obj.confidence > 0.7).length}
               </div>
-            ))}
+              <div className="text-blue-600">High Confidence</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">
+                {trackedObjects.filter(obj => obj.stable && obj.confidence > 0.5 && obj.confidence <= 0.7).length}
+              </div>
+              <div className="text-orange-600">Medium Confidence</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-600">
+                {trackedObjects.filter(obj => obj.distance && obj.distance < 5).length}
+              </div>
+              <div className="text-red-600">Very Close</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {trackedObjects.filter(obj => obj.distance && obj.distance >= 5 && obj.distance < 15).length}
+              </div>
+              <div className="text-green-600">Nearby</div>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Active Alerts */}
+        {alerts.length > 0 ? (
+          <div className="space-y-2">
+            {alerts
+              .sort((a, b) => b.timestamp - a.timestamp)
+              .slice(0, 5)
+              .map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`p-3 rounded-lg border-l-4 ${
+                    alert.type === 'danger' 
+                      ? 'border-red-500 bg-red-50 text-red-800' 
+                      : alert.type === 'warning'
+                      ? 'border-yellow-500 bg-yellow-50 text-yellow-800'
+                      : 'border-blue-500 bg-blue-50 text-blue-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="font-medium">{alert.message}</span>
+                  </div>
+                  <div className="text-xs mt-1 opacity-75">
+                    {new Date(alert.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-muted-foreground">
+            <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p>No active alerts</p>
+            <p className="text-sm">Objects will appear here when detected</p>
+          </div>
+        )}
+      </div>
+
+      {/* Comprehensive Object List for Situational Awareness */}
+      <div className="p-4 bg-card border-b border-border">
+        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Target className="w-5 h-5" />
+          Complete Environment Scan ({trackedObjects.length} objects detected)
+        </h3>
+        
+        {trackedObjects.length > 0 ? (
+          <div className="space-y-3">
+            {/* High Priority Objects (Very Close) */}
+            {trackedObjects.filter(obj => obj.distance && obj.distance < 3).length > 0 && (
+              <div>
+                <h4 className="font-medium text-red-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  High Priority - Very Close Objects
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {trackedObjects
+                    .filter(obj => obj.distance && obj.distance < 3)
+                    .sort((a, b) => (a.distance || 0) - (b.distance || 0))
+                    .map((obj) => (
+                      <div key={obj.id} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-red-800 capitalize">{obj.class}</span>
+                          <Badge variant="destructive" className="text-xs">
+                            {Math.round(obj.distance || 0)}m
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-red-700 space-y-1">
+                          <div>Direction: <span className="font-medium">{obj.direction}</span></div>
+                          <div>Confidence: <span className="font-medium">{Math.round(obj.confidence * 100)}%</span></div>
+                          <div>Stability: <span className="font-medium">{obj.frameCount} frames</span></div>
+                          <div>Status: <span className="font-medium">{obj.focused ? 'FOCUSED' : 'Tracked'}</span></div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Medium Priority Objects (Nearby) */}
+            {trackedObjects.filter(obj => obj.distance && obj.distance >= 3 && obj.distance < 10).length > 0 && (
+              <div>
+                <h4 className="font-medium text-orange-700 mb-2 flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Medium Priority - Nearby Objects
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {trackedObjects
+                    .filter(obj => obj.distance && obj.distance >= 3 && obj.distance < 10)
+                    .sort((a, b) => (a.distance || 0) - (b.distance || 0))
+                    .map((obj) => (
+                      <div key={obj.id} className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-orange-800 capitalize">{obj.class}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {Math.round(obj.distance || 0)}m
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-orange-700 space-y-1">
+                          <div>Direction: <span className="font-medium">{obj.direction}</span></div>
+                          <div>Confidence: <span className="font-medium">{Math.round(obj.confidence * 100)}%</span></div>
+                          <div>Stability: <span className="font-medium">{obj.frameCount} frames</span></div>
+                          <div>Status: <span className="font-medium">{obj.focused ? 'FOCUSED' : 'Tracked'}</span></div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Low Priority Objects (Far Away) */}
+            {trackedObjects.filter(obj => obj.distance && obj.distance >= 10).length > 0 && (
+              <div>
+                <h4 className="font-medium text-green-700 mb-2 flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Low Priority - Distant Objects
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {trackedObjects
+                    .filter(obj => obj.distance && obj.distance >= 10)
+                    .sort((a, b) => (a.distance || 0) - (b.distance || 0))
+                    .map((obj) => (
+                      <div key={obj.id} className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-green-800 capitalize">{obj.class}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {Math.round(obj.distance || 0)}m
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-green-700 space-y-1">
+                          <div>Direction: <span className="font-medium">{obj.direction}</span></div>
+                          <div>Confidence: <span className="font-medium">{Math.round(obj.confidence * 100)}%</span></div>
+                          <div>Stability: <span className="font-medium">{obj.frameCount} frames</span></div>
+                          <div>Status: <span className="font-medium">{obj.focused ? 'FOCUSED' : 'Tracked'}</span></div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Unstable Objects (Still being tracked) */}
+            {trackedObjects.filter(obj => !obj.stable).length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Unstable Objects (Still being tracked)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {trackedObjects
+                    .filter(obj => !obj.stable)
+                    .map((obj) => (
+                      <div key={obj.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-gray-800 capitalize">{obj.class}</span>
+                          <Badge variant="outline" className="text-xs">
+                            Unstable
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <div>Direction: <span className="font-medium">{obj.direction}</span></div>
+                          <div>Confidence: <span className="font-medium">{Math.round(obj.confidence * 100)}%</span></div>
+                          <div>Frames: <span className="font-medium">{obj.frameCount}/3</span></div>
+                          <div>Distance: <span className="font-medium">~{Math.round(obj.distance || 0)}m</span></div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-muted-foreground">
+            <Target className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p>No objects detected yet</p>
+            <p className="text-sm">Start detection to begin scanning your environment</p>
+          </div>
+        )}
+      </div>
 
       {/* Camera View */}
       <div className="relative bg-black">
@@ -806,9 +995,81 @@ const ObjectDetectionCamera: React.FC = () => {
           }}
         />
         
+        {/* Enhanced Tracking Frame Overlay */}
+        {isDetecting && (
+          <div className="absolute top-4 left-4 bg-black bg-opacity-90 text-white p-4 rounded-lg border border-white/20 backdrop-blur-sm max-w-sm">
+            <div className="text-sm space-y-3">
+              <div className="flex items-center gap-2 border-b border-white/20 pb-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <span className="font-semibold">Live Detection Active</span>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Model:</span>
+                  <span className="font-medium">COCO-SSD</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">FPS:</span>
+                  <span className="font-medium">{fps}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Objects:</span>
+                  <span className="font-medium">{trackedObjects.filter(obj => obj.stable).length} stable</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Total:</span>
+                  <span className="font-medium">{trackedObjects.length}</span>
+                </div>
+              </div>
+
+              {/* Quick Object Summary */}
+              {trackedObjects.filter(obj => obj.stable && obj.confidence > 0.6).length > 0 && (
+                <div className="border-t border-white/20 pt-2">
+                  <div className="text-xs text-gray-300 mb-1">Nearby Objects:</div>
+                  <div className="space-y-1">
+                    {trackedObjects
+                      .filter(obj => obj.stable && obj.confidence > 0.6)
+                      .sort((a, b) => (a.distance || 0) - (b.distance || 0))
+                      .slice(0, 3)
+                      .map((obj) => (
+                        <div key={obj.id} className="flex justify-between items-center text-xs">
+                          <span className="capitalize">{obj.class}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              obj.focused ? 'bg-yellow-600' : 'bg-green-600'
+                            }`}>
+                              {obj.focused ? 'FOCUS' : Math.round(obj.confidence * 100)}%
+                            </span>
+                            <span className="text-gray-300">
+                              {Math.round(obj.distance || 0)}m {obj.direction}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Focus Mode Status */}
+              {focusMode && (
+                <div className="border-t border-white/20 pt-2">
+                  <div className="flex items-center gap-2 text-yellow-400">
+                    <Eye className="w-4 h-4" />
+                    <span className="text-xs font-medium">Focus Mode Active</span>
+                  </div>
+                  <div className="text-xs text-gray-300 mt-1">
+                    Click objects to focus on them
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
         {/* Focus Mode Instructions Overlay */}
         {focusMode && isDetecting && (
-          <div className="absolute top-4 left-4 bg-black bg-opacity-75 text-white p-3 rounded-lg">
+          <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded-lg">
             <p className="text-sm">
               <Eye className="w-4 h-4 inline mr-2" />
               Click on objects to focus on them
