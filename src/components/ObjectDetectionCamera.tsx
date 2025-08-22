@@ -4,7 +4,7 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Square, AlertTriangle, Target, Volume2, VolumeX } from 'lucide-react';
+import { Camera, Square, AlertTriangle, Target, Volume2, VolumeX, Focus, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Detection {
@@ -13,6 +13,20 @@ interface Detection {
   score: number;
   distance?: number;
   direction?: 'left' | 'center' | 'right';
+}
+
+interface TrackedObject {
+  id: string;
+  class: string;
+  bbox: [number, number, number, number];
+  score: number;
+  distance?: number;
+  direction?: 'left' | 'center' | 'right';
+  confidence: number;
+  lastSeen: number;
+  frameCount: number;
+  stable: boolean;
+  focused: boolean;
 }
 
 interface Alert {
@@ -32,10 +46,12 @@ const ObjectDetectionCamera: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDetecting, setIsDetecting] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
+  const [trackedObjects, setTrackedObjects] = useState<TrackedObject[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [fps, setFps] = useState(0);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
   const [lastSpokenTime, setLastSpokenTime] = useState<{ [key: string]: number }>({});
 
   const { toast } = useToast();
@@ -195,36 +211,158 @@ const ObjectDetectionCamera: React.FC = () => {
     return 'center';
   };
 
+  // Object tracking and stability functions
+  const calculateIoU = (bbox1: [number, number, number, number], bbox2: [number, number, number, number]): number => {
+    const [x1, y1, w1, h1] = bbox1;
+    const [x2, y2, w2, h2] = bbox2;
+    
+    const xLeft = Math.max(x1, x2);
+    const yTop = Math.max(y1, y2);
+    const xRight = Math.min(x1 + w1, x2 + w2);
+    const yBottom = Math.min(y1 + h1, y2 + h2);
+    
+    if (xRight < xLeft || yBottom < yTop) return 0;
+    
+    const intersectionArea = (xRight - xLeft) * (yBottom - yTop);
+    const unionArea = w1 * h1 + w2 * h2 - intersectionArea;
+    
+    return intersectionArea / unionArea;
+  };
+
+  const trackObjects = (newDetections: Detection[]): TrackedObject[] => {
+    const now = Date.now();
+    const currentTracked = [...trackedObjects];
+    const updatedTracked: TrackedObject[] = [];
+    
+    // Process new detections
+    newDetections.forEach(detection => {
+      let bestMatch: TrackedObject | null = null;
+      let bestIoU = 0.3; // Minimum IoU threshold for matching
+      
+      // Find best matching tracked object
+      currentTracked.forEach((tracked, index) => {
+        if (tracked.class === detection.class) {
+          const iou = calculateIoU(tracked.bbox, detection.bbox);
+          if (iou > bestIoU) {
+            bestIoU = iou;
+            bestMatch = tracked;
+          }
+        }
+      });
+      
+      if (bestMatch) {
+        // Update existing tracked object
+        const updated = {
+          ...bestMatch,
+          bbox: detection.bbox,
+          score: detection.score,
+          distance: detection.distance,
+          direction: detection.direction,
+          confidence: Math.min(1, bestMatch.confidence + 0.1),
+          lastSeen: now,
+          frameCount: bestMatch.frameCount + 1,
+          stable: bestMatch.frameCount >= 3, // Object is stable after 3 frames
+        };
+        updatedTracked.push(updated);
+        
+        // Remove from current tracked list
+        const index = currentTracked.findIndex(t => t.id === bestMatch!.id);
+        if (index > -1) currentTracked.splice(index, 1);
+      } else {
+        // Create new tracked object
+        const newTracked: TrackedObject = {
+          id: `${detection.class}-${Date.now()}-${Math.random()}`,
+          class: detection.class,
+          bbox: detection.bbox,
+          score: detection.score,
+          distance: detection.distance,
+          direction: detection.direction,
+          confidence: 0.5,
+          lastSeen: now,
+          frameCount: 1,
+          stable: false,
+          focused: false,
+        };
+        updatedTracked.push(newTracked);
+      }
+    });
+    
+    // Keep old tracked objects for a short time (for stability)
+    currentTracked.forEach(tracked => {
+      const timeSinceLastSeen = now - tracked.lastSeen;
+      if (timeSinceLastSeen < 1000 && tracked.frameCount > 1) { // Keep for 1 second if seen multiple times
+        updatedTracked.push({
+          ...tracked,
+          confidence: Math.max(0, tracked.confidence - 0.05), // Gradually reduce confidence
+        });
+      }
+    });
+    
+    return updatedTracked;
+  };
+
+  // Focus on specific object
+  const focusOnObject = useCallback((objectId: string) => {
+    setTrackedObjects(prev => prev.map(obj => ({
+      ...obj,
+      focused: obj.id === objectId
+    })));
+    
+    // Find the focused object
+    const focused = trackedObjects.find(obj => obj.id === objectId);
+    if (focused && speechEnabled) {
+      const message = `Focusing on ${focused.class} ${focused.direction}, ${Math.round(focused.distance || 0)} meters away`;
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [trackedObjects, speechEnabled]);
+
   // Text-to-speech functionality using Web Speech API
-  const speakDetection = useCallback((detection: Detection) => {
+  const speakDetection = useCallback((trackedObject: TrackedObject) => {
     if (!speechEnabled || !window.speechSynthesis) return;
     
     const now = Date.now();
-    const objectKey = `${detection.class}-${detection.direction}`;
+    const objectKey = `${trackedObject.class}-${trackedObject.direction}`;
     const timeSinceLastSpoken = now - (lastSpokenTime[objectKey] || 0);
     
-    // Reduced cooldown to 800ms and made it position-specific for faster response
-    if (timeSinceLastSpoken < 800) return;
+    // Increased cooldown to 3 seconds for more focused speech
+    if (timeSinceLastSpoken < 3000) return;
+    
+    // Only speak about stable objects (seen for at least 3 frames)
+    if (!trackedObject.stable) return;
     
     // Cancel any ongoing speech for immediate response
     window.speechSynthesis.cancel();
     
-    const distance = Math.round(detection.distance || 0);
-    const direction = detection.direction;
+    const distance = Math.round(trackedObject.distance || 0);
+    const direction = trackedObject.direction;
     
-    // Create shorter, more responsive speech messages
+    // Create more focused speech messages
     let message = '';
-    if (distance < 2) {
-      message = `${detection.class}, ${direction}, very close`;
-    } else if (distance < 5) {
-      message = `${detection.class}, ${direction}, ${distance} meters`;
+    if (trackedObject.focused) {
+      // Enhanced speech for focused objects
+      if (distance < 2) {
+        message = `Focused on ${trackedObject.class}, ${direction}, very close at ${distance} meters`;
+      } else if (distance < 5) {
+        message = `Focused on ${trackedObject.class}, ${direction}, ${distance} meters away`;
+      } else {
+        message = `Focused on ${trackedObject.class}, ${direction}, ${distance} meters away`;
+      }
     } else {
-      message = `${detection.class}, ${direction}, ${distance} meters`;
+      // Regular speech for stable objects
+      if (distance < 2) {
+        message = `${trackedObject.class}, ${direction}, very close`;
+      } else if (distance < 5) {
+        message = `${trackedObject.class}, ${direction}, ${distance} meters`;
+      } else {
+        message = `${trackedObject.class}, ${direction}, ${distance} meters`;
+      }
     }
     
-    // Create and configure speech for faster delivery
+    // Create and configure speech for better delivery
     const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = 1.5; // Faster speech rate
+    utterance.rate = 1.0; // Normal speech rate for clarity
     utterance.pitch = 1.0;
     utterance.volume = 0.9;
     
@@ -265,16 +403,14 @@ const ObjectDetectionCamera: React.FC = () => {
     };
   };
 
-  // Main detection loop with optimized performance
+  // Main detection loop with optimized performance and object tracking
   const startDetection = useCallback(() => {
     console.log('🎯 startDetection called');
     
-    // Don't check isDetecting here - let the detection loop handle it
-
     let lastTime = Date.now();
     let frameCount = 0;
     let lastDetectionTime = 0;
-    const detectionInterval = 100; // Faster for real-time response
+    const detectionInterval = 500; // Increased to 500ms for more stability
     let currentDetections: Detection[] = [];
 
     const detect = async () => {
@@ -329,8 +465,8 @@ const ObjectDetectionCamera: React.FC = () => {
           const predictions = await modelRef.current.detect(video);
           console.log('🎯 Raw predictions:', predictions.length, predictions.map(p => `${p.class}:${Math.round(p.score*100)}%`));
           
-          // Lower threshold for testing
-          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.2);
+          // Higher threshold for more stable detection
+          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.4);
           console.log('✅ Filtered predictions:', filteredPredictions.length);
           
           if (filteredPredictions.length > 0) {
@@ -350,40 +486,63 @@ const ObjectDetectionCamera: React.FC = () => {
             };
           });
 
-          // Update detections state
-          setDetections(currentDetections);
+          // Update tracked objects
+          const newTrackedObjects = trackObjects(currentDetections);
+          setTrackedObjects(newTrackedObjects);
           
-          // Speak about new high-confidence detections
-          currentDetections.forEach(detection => {
-            if (detection.score > 0.4) { // Only speak for high confidence
-              speakDetection(detection);
+          // Update detections state with stable objects only
+          const stableDetections = newTrackedObjects
+            .filter(obj => obj.stable && obj.confidence > 0.6)
+            .map(obj => ({
+              bbox: obj.bbox,
+              class: obj.class,
+              score: obj.score,
+              distance: obj.distance,
+              direction: obj.direction
+            }));
+          
+          setDetections(stableDetections);
+          
+          // Speak about stable, high-confidence tracked objects
+          newTrackedObjects.forEach(trackedObject => {
+            if (trackedObject.stable && trackedObject.confidence > 0.7) {
+              speakDetection(trackedObject);
             }
           });
           
           lastDetectionTime = currentTime;
         }
 
-        // Always draw the current detections
-        if (currentDetections.length > 0) {
-          console.log('🎨 Drawing', currentDetections.length, 'detections');
+        // Draw tracked objects with enhanced visualization
+        const objectsToDraw = focusMode 
+          ? trackedObjects.filter(obj => obj.focused)
+          : trackedObjects.filter(obj => obj.stable && obj.confidence > 0.5);
+        
+        if (objectsToDraw.length > 0) {
+          console.log('🎨 Drawing', objectsToDraw.length, 'tracked objects');
         }
         
-        currentDetections.forEach((detection, index) => {
-          const [x, y, width, height] = detection.bbox;
-          console.log(`🎨 Drawing detection ${index}:`, detection.class, 'at', [x, y, width, height]);
+        objectsToDraw.forEach((trackedObject, index) => {
+          const [x, y, width, height] = trackedObject.bbox;
+          console.log(`🎨 Drawing tracked object ${index}:`, trackedObject.class, 'at', [x, y, width, height]);
           
-          // Bright, highly visible colors
-          ctx.strokeStyle = '#00FF00'; // Bright green
-          ctx.fillStyle = '#00FF00';
-          ctx.lineWidth = 4; // Thicker lines
-          ctx.font = 'bold 20px Arial';
+          // Different colors for focused vs stable objects
+          if (trackedObject.focused) {
+            ctx.strokeStyle = '#FFD700'; // Gold for focused objects
+            ctx.fillStyle = '#FFD700';
+            ctx.lineWidth = 6; // Thicker lines for focused objects
+          } else {
+            ctx.strokeStyle = '#00FF00'; // Green for stable objects
+            ctx.fillStyle = '#00FF00';
+            ctx.lineWidth = 4; // Normal thickness for stable objects
+          }
           
           // Draw bounding box
           ctx.strokeRect(x, y, width, height);
           console.log(`✏️ Drew bounding box at [${x}, ${y}, ${width}, ${height}]`);
           
           // Draw label background
-          const label = `${detection.class.toUpperCase()} ${Math.round(detection.score * 100)}%`;
+          const label = `${trackedObject.class.toUpperCase()} ${Math.round(trackedObject.confidence * 100)}%`;
           const metrics = ctx.measureText(label);
           const labelWidth = metrics.width + 20;
           const labelHeight = 30;
@@ -395,16 +554,26 @@ const ObjectDetectionCamera: React.FC = () => {
           // White text for label
           ctx.fillStyle = '#FFFFFF';
           ctx.fillText(label, x + 10, y - 8);
+          
+          // Add focus button for each object
+          if (!focusMode) {
+            const buttonWidth = 80;
+            const buttonHeight = 25;
+            const buttonX = x + width - buttonWidth - 5;
+            const buttonY = y + height + 5;
+            
+            // Button background
+            ctx.fillStyle = 'rgba(0, 123, 255, 0.9)';
+            ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
+            // Button text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText('FOCUS', buttonX + 20, buttonY + 17);
+          }
+          
           console.log(`✏️ Drew label "${label}" at [${x + 10}, ${y - 8}]`);
         });
-
-        // Draw a test rectangle to verify canvas is working
-        ctx.strokeStyle = '#FF0000';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(10, 10, 100, 50);
-        ctx.fillStyle = '#FF0000';
-        ctx.font = 'bold 16px Arial';
-        ctx.fillText('TEST', 15, 30);
 
       } catch (error) {
         console.error('❌ Detection error:', error);
@@ -429,7 +598,7 @@ const ObjectDetectionCamera: React.FC = () => {
 
     console.log('🚀 Starting detection loop...');
     detect();
-  }, [speakDetection]);
+  }, [speakDetection, focusMode, trackedObjects]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -471,7 +640,7 @@ const ObjectDetectionCamera: React.FC = () => {
 
       {/* Camera Controls */}
       <div className="p-4 bg-card border-b border-border">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {!isDetecting ? (
             <Button onClick={startCamera} disabled={!modelLoaded} className="gap-2">
               <Camera className="w-4 h-4" />
@@ -493,8 +662,84 @@ const ObjectDetectionCamera: React.FC = () => {
             {speechEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             {speechEnabled ? 'Audio On' : 'Audio Off'}
           </Button>
+
+          <Button
+            onClick={() => setFocusMode(!focusMode)}
+            variant={focusMode ? "default" : "outline"}
+            className="gap-2"
+            disabled={!isDetecting}
+          >
+            <Focus className="w-4 h-4" />
+            {focusMode ? 'Focus Mode On' : 'Focus Mode Off'}
+          </Button>
         </div>
+        
+        {/* Focus Mode Instructions */}
+        {focusMode && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <Eye className="w-4 h-4 inline mr-2" />
+              Focus Mode: Only focused objects are displayed and tracked. Click on objects to focus on them.
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Tracked Objects Panel */}
+      {trackedObjects.length > 0 && (
+        <div className="p-4 bg-card border-b border-border">
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Target className="w-5 h-5" />
+            Tracked Objects ({trackedObjects.filter(obj => obj.stable).length} stable)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {trackedObjects
+              .filter(obj => obj.stable && obj.confidence > 0.5)
+              .sort((a, b) => b.confidence - a.confidence)
+              .map((obj) => (
+                <div
+                  key={obj.id}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    obj.focused 
+                      ? 'border-yellow-400 bg-yellow-50' 
+                      : 'border-green-200 bg-green-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-lg capitalize">{obj.class}</span>
+                    <Badge variant={obj.focused ? "default" : "secondary"}>
+                      {Math.round(obj.confidence * 100)}%
+                    </Badge>
+                  </div>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div>Direction: <span className="font-medium">{obj.direction}</span></div>
+                    <div>Distance: <span className="font-medium">~{Math.round(obj.distance || 0)}m</span></div>
+                    <div>Frames: <span className="font-medium">{obj.frameCount}</span></div>
+                  </div>
+                  {!obj.focused && (
+                    <Button
+                      size="sm"
+                      onClick={() => focusOnObject(obj.id)}
+                      className="w-full mt-2"
+                      variant="outline"
+                    >
+                      <Focus className="w-3 h-3 mr-1" />
+                      Focus
+                    </Button>
+                  )}
+                  {obj.focused && (
+                    <div className="mt-2 text-center">
+                      <Badge variant="default" className="bg-yellow-500">
+                        <Eye className="w-3 h-3 mr-1" />
+                        Focused
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Alert Panel */}
       {alerts.length > 0 && (
@@ -523,30 +768,51 @@ const ObjectDetectionCamera: React.FC = () => {
       )}
 
       {/* Camera View */}
-      <div className="relative flex-1">
+      <div className="relative bg-black">
         <video
           ref={videoRef}
-          className="w-full h-auto max-h-[60vh] object-cover"
+          className="w-full h-auto"
+          autoPlay
           playsInline
           muted
         />
         <canvas
           ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+          className="absolute top-0 left-0 w-full h-full pointer-events-auto"
+          onClick={(e) => {
+            if (!focusMode) return;
+            
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            
+            // Find clicked object
+            const clickedObject = trackedObjects.find(obj => {
+              const [objX, objY, objWidth, objHeight] = obj.bbox;
+              return x >= objX && x <= objX + objWidth && 
+                     y >= objY && y <= objY + objHeight;
+            });
+            
+            if (clickedObject) {
+              focusOnObject(clickedObject.id);
+              toast({
+                title: "Object Focused",
+                description: `Now focusing on ${clickedObject.class}`,
+              });
+            }
+          }}
         />
         
-        {/* Overlay Info */}
-        {isDetecting && (
-          <div className="absolute top-4 left-4 bg-card/90 rounded-lg p-3 border border-border backdrop-blur-sm">
-            <div className="text-sm space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-detection-success rounded-full animate-pulse" />
-                <span>Live Detection Active</span>
-              </div>
-              <div className="text-muted-foreground">
-                Model: COCO-SSD | FPS: {fps}
-              </div>
-            </div>
+        {/* Focus Mode Instructions Overlay */}
+        {focusMode && isDetecting && (
+          <div className="absolute top-4 left-4 bg-black bg-opacity-75 text-white p-3 rounded-lg">
+            <p className="text-sm">
+              <Eye className="w-4 h-4 inline mr-2" />
+              Click on objects to focus on them
+            </p>
           </div>
         )}
       </div>
