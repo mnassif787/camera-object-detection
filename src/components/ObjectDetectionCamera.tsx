@@ -530,6 +530,34 @@ const ObjectDetectionCamera: React.FC = () => {
         ctx.fillText(`Objects: ${objectsToDraw.length} | Total: ${trackedObjects.length}`, 10, 30);
         ctx.strokeRect(10, 40, 200, 30);
         
+        // Draw additional debug info
+        ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 10, 80);
+        ctx.fillText(`Video: ${video.videoWidth}x${video.videoHeight}`, 10, 110);
+        ctx.fillText(`Detection: ${currentDetections.length}`, 10, 140);
+        
+        // Draw a test pattern to verify canvas is working
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(10, 160, 100, 50);
+        ctx.fillStyle = '#00FF00';
+        ctx.fillText('TEST', 15, 185);
+        
+        // Draw grid lines to verify canvas positioning
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < canvas.width; i += 50) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i, canvas.height);
+          ctx.stroke();
+        }
+        for (let i = 0; i < canvas.height; i += 50) {
+          ctx.beginPath();
+          ctx.moveTo(0, i);
+          ctx.lineTo(canvas.width, i);
+          ctx.stroke();
+        }
+        
         objectsToDraw.forEach((trackedObject, index) => {
           const [x, y, width, height] = trackedObject.bbox;
           console.log(`🎨 Drawing tracked object ${index}:`, trackedObject.class, 'at', [x, y, width, height]);
@@ -1084,7 +1112,11 @@ const ObjectDetectionCamera: React.FC = () => {
         />
         <canvas
           ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full pointer-events-auto"
+          className="absolute top-0 left-0 w-full h-full pointer-events-auto z-10"
+          style={{ 
+            border: '2px solid red',
+            backgroundColor: 'rgba(255, 0, 0, 0.1)'
+          }}
           onClick={(e) => {
             if (!focusMode) return;
             
@@ -1114,7 +1146,7 @@ const ObjectDetectionCamera: React.FC = () => {
         
         {/* Enhanced Tracking Frame Overlay */}
         {isDetecting && (
-          <div className="absolute top-4 left-4 bg-black bg-opacity-90 text-white p-4 rounded-lg border border-white/20 backdrop-blur-sm max-w-sm">
+          <div className="absolute top-4 left-4 bg-black bg-opacity-90 text-white p-4 rounded-lg border border-white/20 backdrop-blur-sm max-w-sm z-20">
             <div className="text-sm space-y-3">
               <div className="flex items-center gap-2 border-b border-white/20 pb-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
@@ -1186,11 +1218,19 @@ const ObjectDetectionCamera: React.FC = () => {
         
         {/* Focus Mode Instructions Overlay */}
         {focusMode && isDetecting && (
-          <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded-lg">
+          <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded-lg z-20">
             <p className="text-sm">
               <Eye className="w-4 h-4 inline mr-2" />
               Click on objects to focus on them
             </p>
+          </div>
+        )}
+
+        {/* Canvas Status Indicator */}
+        {isDetecting && (
+          <div className="absolute bottom-4 left-4 bg-red-600 text-white p-2 rounded-lg z-20">
+            <div className="text-xs font-bold">CANVAS ACTIVE</div>
+            <div className="text-xs">Tracking Frame: {trackedObjects.length} objects</div>
           </div>
         )}
       </div>
