@@ -93,7 +93,11 @@ const ObjectDetectionCamera: React.FC = () => {
           if (videoRef.current) {
             videoRef.current.play();
             setIsDetecting(true);
-            startDetection();
+            // Start detection after a brief delay to ensure state is updated
+            setTimeout(() => {
+              console.log('🚀 Starting detection after timeout...');
+              startDetection();
+            }, 100);
           }
         };
       }
@@ -184,11 +188,9 @@ const ObjectDetectionCamera: React.FC = () => {
 
   // Main detection loop with optimized performance
   const startDetection = useCallback(() => {
-    console.log('🎯 startDetection called, isDetecting:', isDetecting);
-    if (!isDetecting) {
-      console.log('❌ Detection not enabled, returning');
-      return;
-    }
+    console.log('🎯 startDetection called');
+    
+    // Don't check isDetecting here - let the detection loop handle it
 
     let lastTime = Date.now();
     let frameCount = 0;
@@ -205,9 +207,7 @@ const ObjectDetectionCamera: React.FC = () => {
           canvas: !!canvasRef.current, 
           model: !!modelRef.current,
         });
-        if (isDetecting) {
-          animationRef.current = requestAnimationFrame(detect);
-        }
+        animationRef.current = requestAnimationFrame(detect);
         return;
       }
 
@@ -218,9 +218,7 @@ const ObjectDetectionCamera: React.FC = () => {
 
       if (!ctx) {
         console.log('❌ No canvas context');
-        if (isDetecting) {
-          animationRef.current = requestAnimationFrame(detect);
-        }
+        animationRef.current = requestAnimationFrame(detect);
         return;
       }
 
@@ -230,9 +228,7 @@ const ObjectDetectionCamera: React.FC = () => {
           height: video.videoHeight,
           readyState: video.readyState
         });
-        if (isDetecting) {
-          animationRef.current = requestAnimationFrame(detect);
-        }
+        animationRef.current = requestAnimationFrame(detect);
         return;
       }
 
@@ -337,14 +333,17 @@ const ObjectDetectionCamera: React.FC = () => {
         lastTime = currentTime;
       }
 
-      if (isDetecting) {
+      // Continue loop while component is still detecting
+      if (videoRef.current && canvasRef.current && modelRef.current) {
         animationRef.current = requestAnimationFrame(detect);
+      } else {
+        console.log('🛑 Detection loop stopped - missing refs or model');
       }
     };
 
     console.log('🚀 Starting detection loop...');
     detect();
-  }, [isDetecting]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
