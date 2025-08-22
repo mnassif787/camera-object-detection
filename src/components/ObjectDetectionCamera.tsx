@@ -4,7 +4,7 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Square, AlertTriangle, Target } from 'lucide-react';
+import { Camera, Square, AlertTriangle, Target, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Detection {
@@ -35,6 +35,8 @@ const ObjectDetectionCamera: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [fps, setFps] = useState(0);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [lastSpokenTime, setLastSpokenTime] = useState<{ [key: string]: number }>({});
 
   const { toast } = useToast();
 
@@ -193,6 +195,46 @@ const ObjectDetectionCamera: React.FC = () => {
     return 'center';
   };
 
+  // Text-to-speech functionality using Web Speech API
+  const speakDetection = useCallback((detection: Detection) => {
+    if (!speechEnabled || !window.speechSynthesis) return;
+    
+    const now = Date.now();
+    const objectKey = detection.class;
+    const timeSinceLastSpoken = now - (lastSpokenTime[objectKey] || 0);
+    
+    // Only speak once every 3 seconds per object to avoid spam
+    if (timeSinceLastSpoken < 3000) return;
+    
+    const distance = Math.round(detection.distance || 0);
+    const direction = detection.direction;
+    
+    // Create natural speech message
+    let message = '';
+    if (distance < 2) {
+      message = `${detection.class} very close, ${direction} side`;
+    } else if (distance < 5) {
+      message = `${detection.class} nearby, ${direction} side, ${distance} meters`;
+    } else {
+      message = `${detection.class} detected, ${direction} side, ${distance} meters away`;
+    }
+    
+    // Create and configure speech
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.rate = 1.1;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.8;
+    
+    // Speak the message
+    window.speechSynthesis.speak(utterance);
+    
+    // Update last spoken time
+    setLastSpokenTime(prev => ({
+      ...prev,
+      [objectKey]: now
+    }));
+  }, [speechEnabled, lastSpokenTime]);
+
   // Generate spatial alerts
   const generateAlert = (detection: Detection): Alert | null => {
     const { class: className, distance, direction, score } = detection;
@@ -308,6 +350,13 @@ const ObjectDetectionCamera: React.FC = () => {
           // Update detections state
           setDetections(currentDetections);
           
+          // Speak about new high-confidence detections
+          currentDetections.forEach(detection => {
+            if (detection.score > 0.4) { // Only speak for high confidence
+              speakDetection(detection);
+            }
+          });
+          
           lastDetectionTime = currentTime;
         }
 
@@ -377,7 +426,7 @@ const ObjectDetectionCamera: React.FC = () => {
 
     console.log('🚀 Starting detection loop...');
     detect();
-  }, []);
+  }, [speakDetection]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -431,6 +480,16 @@ const ObjectDetectionCamera: React.FC = () => {
               Stop Detection
             </Button>
           )}
+          
+          <Button
+            onClick={() => setSpeechEnabled(!speechEnabled)}
+            variant="outline"
+            className="gap-2"
+            disabled={!window.speechSynthesis}
+          >
+            {speechEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {speechEnabled ? 'Audio On' : 'Audio Off'}
+          </Button>
         </div>
       </div>
 
