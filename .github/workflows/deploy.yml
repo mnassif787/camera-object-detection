@@ -27,9 +27,21 @@ jobs:
       - name: Build
         run: npm run build
         
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          force_orphan: true
+      - name: Deploy to gh-pages
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # Remove existing gh-pages branch if it exists
+          git push origin --delete gh-pages || true
+          
+          # Create new gh-pages branch from dist folder
+          git checkout --orphan gh-pages
+          git rm -rf .
+          cp -r dist/* .
+          git add .
+          git commit -m "Deploy to GitHub Pages"
+          git push origin gh-pages
+          
+          # Return to main branch
+          git checkout main
