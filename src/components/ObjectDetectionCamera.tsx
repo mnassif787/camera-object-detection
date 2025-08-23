@@ -457,6 +457,14 @@ const ObjectDetectionCamera: React.FC = () => {
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Debug: Draw a test rectangle to verify canvas is working
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(10, 10, 100, 50);
+      ctx.fillStyle = '#FF0000';
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText('TEST', 15, 35);
+
       try {
         // Run object detection at controlled intervals
         if (currentTime - lastDetectionTime >= detectionInterval) {
@@ -514,8 +522,12 @@ const ObjectDetectionCamera: React.FC = () => {
           ? trackedObjects.filter(obj => obj.focused)
           : trackedObjects.filter(obj => obj.stable && obj.confidence > 0.3);
         
+        console.log('🎨 Drawing objects:', objectsToDraw.length, 'objects to draw');
+        
         objectsToDraw.forEach((trackedObject, index) => {
           const [x, y, width, height] = trackedObject.bbox;
+          
+          console.log(`🎨 Drawing object ${index}:`, trackedObject.class, 'at', x, y, width, height);
           
           // Different colors for focused vs stable objects
           if (trackedObject.focused) {
@@ -618,7 +630,7 @@ const ObjectDetectionCamera: React.FC = () => {
 
     console.log('🚀 Starting detection loop...');
     detect();
-  }, [speakDetection, focusMode, trackedObjects]);
+  }, [speakDetection, focusMode]); // Removed trackedObjects dependency to prevent recreation
 
   // Cleanup on unmount
   useEffect(() => {
@@ -690,6 +702,7 @@ const ObjectDetectionCamera: React.FC = () => {
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full pointer-events-auto z-10"
+          style={{ border: '2px solid red' }} // Debug: Add red border to see canvas
           onClick={(e) => {
             if (!focusMode) return;
             
@@ -712,6 +725,17 @@ const ObjectDetectionCamera: React.FC = () => {
             }
           }}
         />
+        
+        {/* Debug Info Overlay */}
+        {isDetecting && (
+          <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white p-2 rounded text-xs z-20">
+            <div>Canvas: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</div>
+            <div>Video: {videoRef.current?.videoWidth || 0} x {videoRef.current?.videoHeight || 0}</div>
+            <div>Objects: {trackedObjects.length}</div>
+            <div>Stable: {trackedObjects.filter(obj => obj.stable).length}</div>
+            <div>FPS: {fps}</div>
+          </div>
+        )}
       </div>
     </div>
   );
