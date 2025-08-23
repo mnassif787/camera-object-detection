@@ -963,7 +963,7 @@ const ObjectDetectionCamera: React.FC = () => {
           } else {
             console.log('No existing detections to draw');
           }
-
+        }
       } catch (error) {
         console.error('Detection error:', error);
       }
