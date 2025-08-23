@@ -21,6 +21,7 @@ const ObjectDetectionCamera: React.FC = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const modelRef = useRef<cocoSsd.ObjectDetection | null>(null);
   const animationRef = useRef<number | null>(null);
+  const detectionsRef = useRef<Detection[]>([]);
 
   // State
   const [isLoading, setIsLoading] = useState(true);
@@ -30,6 +31,11 @@ const ObjectDetectionCamera: React.FC = () => {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [fps, setFps] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState('Initializing...');
+
+  // Update ref when detections state changes
+  useEffect(() => {
+    detectionsRef.current = detections;
+  }, [detections]);
 
   // Constants
   const DETECTION_INTERVAL = 100; // ms
@@ -201,7 +207,7 @@ const ObjectDetectionCamera: React.FC = () => {
     } catch (error) {
       console.error('Camera access error:', error);
     }
-  }, [startDetection]);
+  }, []);
 
   // Stop camera
   const stopCamera = useCallback(() => {
@@ -296,10 +302,12 @@ const ObjectDetectionCamera: React.FC = () => {
       }
 
       // Always draw current detections (from state) for smooth updates
-      if (detections.length > 0) {
-        console.log(`Drawing ${detections.length} objects...`);
+      // Use a ref to get the latest detections without causing dependency issues
+      const currentDetections = detectionsRef.current;
+      if (currentDetections.length > 0) {
+        console.log(`Drawing ${currentDetections.length} objects...`);
         
-        detections.forEach((detection, index) => {
+        currentDetections.forEach((detection, index) => {
           const [x, y, width, height] = detection.bbox;
           const color = getDistanceColor(detection.distance);
           
@@ -370,7 +378,7 @@ const ObjectDetectionCamera: React.FC = () => {
 
     // Start the detection loop
     detect(performance.now());
-  }, [detections, speak]);
+  }, [speak]);
 
   // Cleanup on unmount
   useEffect(() => {
