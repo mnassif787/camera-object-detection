@@ -8,6 +8,7 @@ interface Detection {
   bbox: [number, number, number, number];
   class: string;
   score: number;
+  distance: number;
 }
 
 const ObjectDetectionCamera: React.FC = () => {
@@ -56,8 +57,8 @@ const ObjectDetectionCamera: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
           frameRate: { ideal: 30, max: 30 }
         }
       });
@@ -94,41 +95,115 @@ const ObjectDetectionCamera: React.FC = () => {
     setDetections([]);
   }, []);
 
-  // Simple distance estimation
-  const estimateDistance = (bbox: [number, number, number, number]): number => {
+  // Distance estimation using focal length approximation
+  const estimateDistance = (bbox: [number, number, number, number], className: string): number => {
     const [x, y, width, height] = bbox;
-    // Simple distance estimation based on object size
-    const objectArea = width * height;
-    const estimatedDistance = Math.max(1, Math.min(20, 1000 / objectArea));
-    return Math.round(estimatedDistance * 10) / 10;
-  };
-
-  // Get direction
-  const getDirection = (bbox: [number, number, number, number], canvasWidth: number): string => {
-    const [x, y, width] = bbox;
-    const centerX = x + width / 2;
-    const threshold = canvasWidth * 0.33;
     
-    if (centerX < threshold) return 'left';
-    if (centerX > canvasWidth - threshold) return 'right';
-    return 'center';
+    // Known real-world dimensions for common objects (in meters)
+    const objectDimensions: { [key: string]: number } = {
+      'person': 0.5,      // Average person width
+      'car': 1.8,         // Average car width
+      'bicycle': 0.6,     // Bicycle width
+      'motorcycle': 0.8,  // Motorcycle width
+      'bus': 2.5,         // Bus width
+      'truck': 2.5,       // Truck width
+      'dog': 0.3,         // Dog width
+      'cat': 0.2,         // Cat width
+      'chair': 0.5,       // Chair width
+      'table': 1.2,       // Table width
+      'bottle': 0.08,     // Bottle width
+      'cup': 0.08,        // Cup width
+      'laptop': 0.35,     // Laptop width
+      'tv': 1.0,          // TV width
+      'cell phone': 0.07, // Phone width
+      'book': 0.15,       // Book width
+      'bowl': 0.15,       // Bowl width
+      'apple': 0.08,      // Apple width
+      'banana': 0.03,     // Banana width
+      'airplane': 35.0,   // Airplane width
+      'train': 3.0,       // Train width
+      'boat': 2.0,        // Boat width
+      'fire hydrant': 0.3, // Fire hydrant width
+      'stop sign': 0.3,   // Stop sign width
+      'bench': 1.5,       // Bench width
+      'bird': 0.15,       // Bird width
+      'horse': 1.0,       // Horse width
+      'sheep': 0.8,       // Sheep width
+      'cow': 1.2,         // Cow width
+      'elephant': 2.5,    // Elephant width
+      'bear': 1.5,        // Bear width
+      'zebra': 1.0,       // Zebra width
+      'giraffe': 0.8,     // Giraffe width
+      'backpack': 0.3,    // Backpack width
+      'umbrella': 0.8,    // Umbrella width
+      'handbag': 0.3,     // Handbag width
+      'suitcase': 0.5,    // Suitcase width
+      'frisbee': 0.25,    // Frisbee width
+      'skis': 0.1,        // Skis width
+      'snowboard': 0.3,   // Snowboard width
+      'sports ball': 0.22, // Sports ball width
+      'kite': 0.8,        // Kite width
+      'baseball bat': 0.05, // Baseball bat width
+      'baseball glove': 0.25, // Baseball glove width
+      'skateboard': 0.8,  // Skateboard width
+      'surfboard': 2.0,   // Surfboard width
+      'tennis racket': 0.3, // Tennis racket width
+      'wine glass': 0.08, // Wine glass width
+      'fork': 0.02,       // Fork width
+      'knife': 0.02,      // Knife width
+      'spoon': 0.02,      // Spoon width
+      'sandwich': 0.15,   // Sandwich width
+      'orange': 0.08,     // Orange width
+      'broccoli': 0.15,   // Broccoli width
+      'carrot': 0.03,     // Carrot width
+      'hot dog': 0.15,    // Hot dog width
+      'pizza': 0.3,       // Pizza width
+      'donut': 0.1,       // Donut width
+      'cake': 0.25,       // Cake width
+      'bed': 1.4,         // Bed width
+      'dining table': 1.8, // Dining table width
+      'toilet': 0.4,      // Toilet width
+      'remote': 0.15,     // Remote width
+      'microwave': 0.5,   // Microwave width
+      'oven': 0.6,        // Oven width
+      'toaster': 0.3,     // Toaster width
+      'sink': 0.5,        // Sink width
+      'refrigerator': 0.8, // Refrigerator width
+      'clock': 0.3,        // Clock width
+      'vase': 0.15,       // Vase width
+      'scissors': 0.15,   // Scissors width
+      'teddy bear': 0.3,  // Teddy bear width
+      'hair drier': 0.2,  // Hair drier width
+      'toothbrush': 0.02, // Toothbrush width
+    };
+
+    // Get known width for this object type, default to 0.5m if unknown
+    const knownWidth = objectDimensions[className] || 0.5;
+    
+    // Focal length approximation (adjust experimentally for your camera)
+    const focalLength = 700;
+    
+    // Calculate distance using focal length formula: distance = (known_width * focal_length) / perceived_width
+    const distance = (knownWidth * focalLength) / width;
+    
+    // Clamp distance to reasonable bounds (0.5m to 50m)
+    const clampedDistance = Math.max(0.5, Math.min(50, distance));
+    
+    return Math.round(clampedDistance * 10) / 10; // Round to 1 decimal place
   };
 
-  // Get color based on distance
+  // Get color based on distance (exactly as specified)
   const getDistanceColor = (distance: number): string => {
-    if (distance < 3) return '#FF0000'; // Red for close
-    if (distance < 5) return '#FF8800'; // Orange for medium
-    return '#00FF00'; // Green for far
+    if (distance < 3) return '#FF0000';      // Red if distance < 3m
+    if (distance <= 5) return '#FFFF00';     // Yellow if distance between 3m and 5m
+    return '#00FF00';                        // Green if distance > 5m
   };
 
-  // Simple speech
+  // Simple speech for detected objects
   const speakDetection = useCallback((detection: Detection) => {
     if (!speechEnabled) return;
     
-    const distance = estimateDistance(detection.bbox);
-    const direction = getDirection(detection.bbox, canvasRef.current?.width || 640);
-    
-    const message = `${detection.class} ${distance} meters ${direction}`;
+    const message = `${detection.class} detected at ${detection.distance} meters`;
     const utterance = new SpeechSynthesisUtterance(message);
     utterance.rate = 0.9;
     window.speechSynthesis.speak(utterance);
@@ -136,14 +211,14 @@ const ObjectDetectionCamera: React.FC = () => {
     console.log('Voice alert:', message);
   }, [speechEnabled]);
 
-  // Main detection loop
+  // Main detection loop - optimized for 30+ FPS
   const startDetection = useCallback(() => {
     console.log('Starting detection loop...');
     
     let lastTime = Date.now();
     let frameCount = 0;
     let lastDetectionTime = 0;
-    const detectionInterval = 500; // Run detection every 500ms
+    const detectionInterval = 100; // Run detection every 100ms for smooth 30+ FPS
 
     const detect = async () => {
       if (!videoRef.current || !canvasRef.current || !modelRef.current) {
@@ -162,7 +237,7 @@ const ObjectDetectionCamera: React.FC = () => {
         return;
       }
 
-      // Set canvas size to match video
+      // Set canvas size to match video dimensions
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -173,7 +248,7 @@ const ObjectDetectionCamera: React.FC = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       try {
-        // Run object detection
+        // Run object detection at controlled intervals
         if (currentTime - lastDetectionTime >= detectionInterval) {
           console.log('Running object detection...');
           
@@ -184,11 +259,16 @@ const ObjectDetectionCamera: React.FC = () => {
             console.log('Objects detected:', filteredPredictions.map(p => `${p.class}:${Math.round(p.score*100)}%`));
           }
           
-          const newDetections = filteredPredictions.map(prediction => ({
-            bbox: prediction.bbox,
-            class: prediction.class,
-            score: prediction.score
-          }));
+          // Process detections with distance estimation
+          const newDetections = filteredPredictions.map(prediction => {
+            const distance = estimateDistance(prediction.bbox, prediction.class);
+            return {
+              bbox: prediction.bbox,
+              class: prediction.class,
+              score: prediction.score,
+              distance
+            };
+          });
           
           setDetections(newDetections);
           
@@ -200,31 +280,37 @@ const ObjectDetectionCamera: React.FC = () => {
           lastDetectionTime = currentTime;
         }
 
-        // Draw bounding boxes
+        // Draw bounding boxes and labels for all detected objects
         detections.forEach((detection, index) => {
           const [x, y, width, height] = detection.bbox;
-          const distance = estimateDistance(detection.bbox);
-          const direction = getDirection(detection.bbox, canvas.width);
-          const color = getDistanceColor(distance);
+          const color = getDistanceColor(detection.distance);
           
-          console.log(`Drawing object ${index}:`, detection.class, 'at', x, y, width, height, 'distance:', distance);
+          console.log(`Drawing object ${index}:`, detection.class, 'at', x, y, width, height, 'distance:', detection.distance);
           
-          // Draw bounding box
+          // Draw bounding box with distance-based color
           ctx.strokeStyle = color;
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 4;
           ctx.strokeRect(x, y, width, height);
           
-          // Draw label
-          const label = `${detection.class} ${distance}m ${direction}`;
+          // Draw label with object name + distance above the bounding box
+          const label = `${detection.class} - ${detection.distance}m`;
           ctx.fillStyle = color;
           ctx.font = 'bold 16px Arial';
-          ctx.fillText(label, x, y - 10);
           
-          // Draw distance indicator
+          // Position label above the object, or below if too close to top
+          const labelY = y > 20 ? y - 10 : y + height + 20;
+          ctx.fillText(label, x, labelY);
+          
+          // Add a small colored dot to indicate distance level
           ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.arc(x + width - 10, y + 10, 5, 0, 2 * Math.PI);
+          ctx.arc(x + width - 10, y + 10, 6, 0, 2 * Math.PI);
           ctx.fill();
+          
+          // Add white border to the dot for better visibility
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1;
+          ctx.stroke();
         });
 
       } catch (error) {
@@ -239,7 +325,7 @@ const ObjectDetectionCamera: React.FC = () => {
         lastTime = currentTime;
       }
 
-      // Continue loop
+      // Continue loop for real-time updates
       if (isDetecting) {
         animationRef.current = requestAnimationFrame(detect);
       }
@@ -317,13 +403,45 @@ const ObjectDetectionCamera: React.FC = () => {
           }}
         />
         
-        {/* Simple Status */}
+        {/* Status Panel */}
         {isDetecting && (
-          <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white p-2 rounded text-xs z-20">
-            <div className="font-bold mb-1">Status</div>
-            <div>Objects: {detections.length}</div>
-            <div>FPS: {fps}</div>
-            <div>Canvas: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</div>
+          <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white p-3 rounded text-sm z-20">
+            <div className="font-bold mb-2 border-b border-white/20 pb-1">📊 Detection Status</div>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span>Objects:</span>
+                <span className="text-green-400 font-bold">{detections.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>FPS:</span>
+                <span className={fps >= 30 ? 'text-green-400' : fps >= 25 ? 'text-yellow-400' : 'text-red-400'}>
+                  {fps}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Canvas:</span>
+                <span className="text-blue-400">{canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</span>
+              </div>
+            </div>
+            
+            {/* Distance Legend */}
+            <div className="mt-2 pt-2 border-t border-white/20">
+              <div className="text-xs font-bold mb-1">Distance Colors:</div>
+              <div className="text-xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span>Red: &lt;3m (Close)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span>Yellow: 3-5m (Medium)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span>Green: &gt;5m (Far)</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
