@@ -27,6 +27,13 @@ interface TrackedObject {
   frameCount: number;
   stable: boolean;
   focused: boolean;
+  // Enhanced tracking properties
+  velocity?: number; // meters per second
+  lastPosition?: [number, number, number, number];
+  proximityWarning?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+  lastDistance?: number;
+  movementDirection?: 'approaching' | 'receding' | 'stationary' | 'lateral';
 }
 
 interface Alert {
@@ -53,6 +60,8 @@ const ObjectDetectionCamera: React.FC = () => {
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
   const [lastSpokenTime, setLastSpokenTime] = useState<{ [key: string]: number }>({});
+  const [enhancedTracking, setEnhancedTracking] = useState(true);
+  const [proximityAlerts, setProximityAlerts] = useState(true);
 
   const { toast } = useToast();
 
@@ -339,7 +348,7 @@ const ObjectDetectionCamera: React.FC = () => {
     }
   };
 
-  // Object tracking and stability functions
+  // Enhanced object tracking and stability functions
   const calculateIoU = (bbox1: [number, number, number, number], bbox2: [number, number, number, number]): number => {
     const [x1, y1, w1, h1] = bbox1;
     const [x2, y2, w2, h2] = bbox2;
@@ -355,6 +364,114 @@ const ObjectDetectionCamera: React.FC = () => {
     const unionArea = w1 * h1 + w2 * h2 - intersectionArea;
     
     return intersectionArea / unionArea;
+  };
+
+  // Calculate object velocity and movement analysis
+  const calculateVelocity = (currentBbox: [number, number, number, number], lastBbox: [number, number, number, number], 
+                           currentDistance: number, lastDistance: number, timeDiff: number): { 
+    velocity: number; 
+    movementDirection: 'approaching' | 'receding' | 'stationary' | 'lateral';
+    riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  } => {
+    if (!lastBbox || timeDiff === 0) {
+      return { velocity: 0, movementDirection: 'stationary', riskLevel: 'low' };
+    }
+
+    const [x1, y1, w1, h1] = currentBbox;
+    const [x2, y2, w2, h2] = lastBbox;
+    
+    // Calculate center points
+    const centerX1 = x1 + w1 / 2;
+    const centerY1 = y1 + h1 / 2;
+    const centerX2 = x2 + w2 / 2;
+    const centerY2 = y2 + h2 / 2;
+    
+    // Calculate pixel movement
+    const pixelMovement = Math.sqrt(
+      Math.pow(centerX1 - centerX2, 2) + Math.pow(centerY1 - centerY2, 2)
+    );
+    
+    // Convert to real-world movement (approximate)
+    const pixelToMeterRatio = currentDistance / Math.max(w1, h1);
+    const realMovement = pixelMovement * pixelToMeterRatio;
+    
+    // Calculate velocity in m/s
+    const velocity = realMovement / (timeDiff / 1000);
+    
+    // Determine movement direction
+    let movementDirection: 'approaching' | 'receding' | 'stationary' | 'lateral';
+    const distanceChange = currentDistance - lastDistance;
+    
+    if (Math.abs(distanceChange) < 0.5) {
+      movementDirection = 'stationary';
+    } else if (distanceChange < -0.5) {
+      movementDirection = 'approaching';
+    } else if (distanceChange > 0.5) {
+      movementDirection = 'receding';
+    } else {
+      movementDirection = 'lateral';
+    }
+    
+    // Calculate risk level based on velocity and distance
+    let riskLevel: 'low' | 'medium' | 'high' | 'critical';
+    if (currentDistance < 2 && velocity > 2) {
+      riskLevel = 'critical';
+    } else if (currentDistance < 3 && velocity > 1.5) {
+      riskLevel = 'high';
+    } else if (currentDistance < 5 && velocity > 1) {
+      riskLevel = 'medium';
+    } else {
+      riskLevel = 'low';
+    }
+    
+    return { velocity, movementDirection, riskLevel };
+  };
+
+  // Enhanced proximity warning system
+  const checkProximityWarnings = (trackedObject: TrackedObject): boolean => {
+    const distance = trackedObject.distance || 0;
+    const velocity = trackedObject.velocity || 0;
+    const movementDirection = trackedObject.movementDirection;
+    
+    // Critical proximity warnings
+    if (distance < 1.5) return true; // Very close
+    if (distance < 2.5 && movementDirection === 'approaching' && velocity > 1) return true; // Approaching quickly
+    if (distance < 3 && velocity > 2) return true; // High velocity nearby
+    
+    return false;
+  };
+
+  // Generate enhanced spatial alerts with risk assessment
+  const generateEnhancedAlert = (trackedObject: TrackedObject): Alert | null => {
+    const distance = trackedObject.distance || 0;
+    const velocity = trackedObject.velocity || 0;
+    const movementDirection = trackedObject.movementDirection;
+    const riskLevel = trackedObject.riskLevel;
+    
+    if (riskLevel === 'critical') {
+      return {
+        id: `critical-${trackedObject.id}`,
+        message: `🚨 CRITICAL: ${trackedObject.class} at ${Math.round(distance)}m ${trackedObject.direction}! Immediate action required!`,
+        type: 'danger',
+        timestamp: Date.now()
+      };
+    } else if (riskLevel === 'high') {
+      return {
+        id: `high-${trackedObject.id}`,
+        message: `⚠️ WARNING: ${trackedObject.class} approaching ${Math.round(distance)}m ${trackedObject.direction}. High risk!`,
+        type: 'warning',
+        timestamp: Date.now()
+      };
+    } else if (movementDirection === 'approaching' && distance < 5) {
+      return {
+        id: `approach-${trackedObject.id}`,
+        message: `📢 ${trackedObject.class} approaching ${Math.round(distance)}m ${trackedObject.direction}. Stay alert.`,
+        type: 'info',
+        timestamp: Date.now()
+      };
+    }
+    
+    return null;
   };
 
   const trackObjects = (newDetections: Detection[]): TrackedObject[] => {
@@ -386,7 +503,36 @@ const ObjectDetectionCamera: React.FC = () => {
       });
       
       if (bestMatch) {
-        // Update existing tracked object with enhanced stability
+        // Update existing tracked object with enhanced stability and movement tracking
+        const timeDiff = now - bestMatch.lastSeen;
+        const lastBbox = bestMatch.lastPosition || bestMatch.bbox;
+        const lastDistance = bestMatch.lastDistance || bestMatch.distance || 0;
+        
+        // Calculate velocity and movement analysis (only if enhanced tracking is enabled)
+        let movementData = { velocity: 0, movementDirection: 'stationary' as const, riskLevel: 'low' as const };
+        let proximityWarning = false;
+        
+        if (enhancedTracking) {
+          movementData = calculateVelocity(
+            detection.bbox, 
+            lastBbox, 
+            detection.distance || 0, 
+            lastDistance, 
+            timeDiff
+          );
+          
+          // Check for proximity warnings (only if proximity alerts are enabled)
+          if (proximityAlerts) {
+            proximityWarning = checkProximityWarnings({
+              ...bestMatch,
+              distance: detection.distance,
+              velocity: movementData.velocity,
+              movementDirection: movementData.movementDirection,
+              riskLevel: movementData.riskLevel
+            });
+          }
+        }
+        
         const updated = {
           ...bestMatch,
           bbox: detection.bbox,
@@ -397,8 +543,24 @@ const ObjectDetectionCamera: React.FC = () => {
           lastSeen: now,
           frameCount: bestMatch.frameCount + 1,
           stable: bestMatch.frameCount >= 2, // Object is stable after 2 frames
+          // Enhanced tracking properties (only if enabled)
+          lastPosition: enhancedTracking ? bestMatch.bbox : undefined,
+          lastDistance: enhancedTracking ? bestMatch.distance : undefined,
+          velocity: enhancedTracking ? movementData.velocity : undefined,
+          movementDirection: enhancedTracking ? movementData.movementDirection : undefined,
+          riskLevel: enhancedTracking ? movementData.riskLevel : undefined,
+          proximityWarning: enhancedTracking && proximityAlerts ? proximityWarning : false
         };
+        
         updatedTracked.push(updated);
+        
+        // Generate enhanced alerts based on movement and risk (only if both features are enabled)
+        if (enhancedTracking && proximityAlerts) {
+          const enhancedAlert = generateEnhancedAlert(updated);
+          if (enhancedAlert) {
+            setAlerts(prev => [enhancedAlert, ...prev.slice(0, 9)]); // Keep last 10 alerts
+          }
+        }
         
         // Remove from current tracked list
         const index = currentTracked.findIndex(t => t.id === bestMatch!.id);
@@ -417,6 +579,11 @@ const ObjectDetectionCamera: React.FC = () => {
           frameCount: 1,
           stable: false,
           focused: false,
+          // Initialize enhanced properties (only if enabled)
+          velocity: enhancedTracking ? 0 : undefined,
+          movementDirection: enhancedTracking ? 'stationary' : undefined,
+          riskLevel: enhancedTracking ? 'low' : undefined,
+          proximityWarning: false
         };
         updatedTracked.push(newTracked);
       }
@@ -465,13 +632,13 @@ const ObjectDetectionCamera: React.FC = () => {
     }
   }, [trackedObjects, speechEnabled]);
 
-  // Enhanced voice alerts with better cooldown and directional awareness
+  // Enhanced voice alerts with movement and risk awareness
   const speakDetection = useCallback((trackedObject: TrackedObject) => {
     if (!speechEnabled) return;
     
     const now = Date.now();
-    const objectKey = `${trackedObject.class}-${trackedObject.direction}`;
-    const cooldown = 5000; // 5 second cooldown per object-direction combination
+    const objectKey = `${trackedObject.class}-${trackedObject.direction}-${trackedObject.movementDirection}`;
+    const cooldown = 5000; // 5 second cooldown per object-direction-movement combination
     
     if (lastSpokenTime[objectKey] && (now - lastSpokenTime[objectKey]) < cooldown) {
       return;
@@ -480,24 +647,49 @@ const ObjectDetectionCamera: React.FC = () => {
     const distance = Math.round(trackedObject.distance || 0);
     const direction = trackedObject.direction;
     const className = trackedObject.class;
+    const velocity = trackedObject.velocity || 0;
+    const movementDirection = trackedObject.movementDirection;
+    const riskLevel = trackedObject.riskLevel;
+    const proximityWarning = trackedObject.proximityWarning;
     
-    // Enhanced alert messages with better context
+    // Enhanced alert messages with movement and risk context
     let message = '';
-    if (distance < 3) {
-      message = `⚠️ ${className} very close! ${distance} meters ${direction}. Immediate attention required.`;
-    } else if (distance < 5) {
-      message = `${className} approaching ${distance} meters ${direction}. Stay alert.`;
-    } else if (distance < 10) {
-      message = `${className} detected ${distance} meters ${direction}.`;
+    
+    if (proximityWarning) {
+      message = `🚨 EMERGENCY! ${className} very close ${distance} meters ${direction}! Immediate action required!`;
+    } else if (riskLevel === 'critical') {
+      message = `🚨 CRITICAL ALERT! ${className} ${distance} meters ${direction}, moving at ${Math.round(velocity * 10) / 10} meters per second!`;
+    } else if (riskLevel === 'high') {
+      message = `⚠️ HIGH RISK! ${className} approaching ${distance} meters ${direction}, velocity ${Math.round(velocity * 10) / 10} m/s. Stay alert!`;
+    } else if (movementDirection === 'approaching' && distance < 5) {
+      message = `📢 ${className} approaching ${distance} meters ${direction} at ${Math.round(velocity * 10) / 10} m/s.`;
+    } else if (movementDirection === 'receding') {
+      message = `${className} moving away ${distance} meters ${direction}.`;
+    } else if (movementDirection === 'lateral') {
+      message = `${className} moving sideways ${distance} meters ${direction}.`;
+    } else if (velocity > 1) {
+      message = `${className} ${distance} meters ${direction}, moving at ${Math.round(velocity * 10) / 10} m/s.`;
     } else {
       message = `${className} ${distance} meters ${direction}.`;
     }
     
-    // Enhanced speech synthesis with better voice and rate
+    // Enhanced speech synthesis with urgency based on risk level
     const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = 0.9; // Slightly slower for clarity
-    utterance.pitch = 1.1; // Slightly higher pitch for attention
-    utterance.volume = 0.8; // Good volume level
+    
+    // Adjust speech parameters based on urgency
+    if (proximityWarning || riskLevel === 'critical') {
+      utterance.rate = 0.8; // Slower for critical alerts
+      utterance.pitch = 1.3; // Higher pitch for urgency
+      utterance.volume = 1.0; // Maximum volume for critical alerts
+    } else if (riskLevel === 'high') {
+      utterance.rate = 0.85;
+      utterance.pitch = 1.2;
+      utterance.volume = 0.9;
+    } else {
+      utterance.rate = 0.9; // Normal rate for regular alerts
+      utterance.pitch = 1.1;
+      utterance.volume = 0.8;
+    }
     
     // Try to use a better voice if available
     const voices = window.speechSynthesis.getVoices();
@@ -509,38 +701,16 @@ const ObjectDetectionCamera: React.FC = () => {
       utterance.voice = preferredVoice;
     }
     
+    // Cancel any ongoing speech for immediate response to critical alerts
+    if (proximityWarning || riskLevel === 'critical') {
+      window.speechSynthesis.cancel();
+    }
+    
     window.speechSynthesis.speak(utterance);
     setLastSpokenTime(prev => ({ ...prev, [objectKey]: now }));
     
-    console.log('🗣️ Voice alert:', message);
+    console.log('🗣️ Enhanced voice alert:', message);
   }, [speechEnabled]);
-
-  // Generate spatial alerts
-  const generateAlert = (detection: Detection): Alert | null => {
-    const { class: className, distance, direction, score } = detection;
-    
-    if (score < 0.3) return null;
-    
-    let alertType: 'warning' | 'danger' | 'info' = 'info';
-    let message = '';
-
-    if (distance && distance < 10) {
-      alertType = 'danger';
-      message = `${className} very close on the ${direction} (~${Math.round(distance)}m)`;
-    } else if (distance && distance < 25) {
-      alertType = 'warning';
-      message = `${className} approaching from ${direction} (~${Math.round(distance)}m)`;
-    } else {
-      message = `${className} detected on the ${direction} (~${Math.round(distance || 50)}m)`;
-    }
-
-    return {
-      id: `${className}-${Date.now()}`,
-      message,
-      type: alertType,
-      timestamp: Date.now()
-    };
-  };
 
   // Main detection loop with optimized performance and object tracking
   const startDetection = useCallback(() => {
@@ -704,8 +874,26 @@ const ObjectDetectionCamera: React.FC = () => {
           const direction = trackedObject.direction;
           const className = trackedObject.class;
           
-          // Create enhanced label with distance priority
-          const label = `${className} ${Math.round(distance)}m ${direction}`;
+          // Create enhanced label with distance priority and movement info
+          const velocity = trackedObject.velocity || 0;
+          const movementDirection = trackedObject.movementDirection;
+          const riskLevel = trackedObject.riskLevel;
+          const proximityWarning = trackedObject.proximityWarning;
+          
+          let label = `${className} ${Math.round(distance)}m ${direction}`;
+          
+          // Add movement and risk information to label
+          if (velocity > 0.5) {
+            label += ` ${Math.round(velocity * 10) / 10}m/s`;
+          }
+          if (movementDirection === 'approaching') {
+            label += ' →';
+          } else if (movementDirection === 'receding') {
+            label += ' ←';
+          }
+          if (proximityWarning) {
+            label += ' ⚠️';
+          }
           
           // Calculate label dimensions
           ctx.font = 'bold 16px Arial';
@@ -728,12 +916,22 @@ const ObjectDetectionCamera: React.FC = () => {
             labelX = 8; // Adjust for left edge
           }
           
-          // Draw enhanced label background with better contrast
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+          // Draw enhanced label background with risk-based colors
+          let labelBgColor = 'rgba(0, 0, 0, 0.9)';
+          let labelBorderColor = colors.stroke;
+          
+          if (proximityWarning) {
+            labelBgColor = 'rgba(255, 0, 0, 0.9)'; // Red background for warnings
+            labelBorderColor = '#FFFFFF';
+          } else if (riskLevel === 'high' || riskLevel === 'critical') {
+            labelBgColor = 'rgba(255, 165, 0, 0.9)'; // Orange background for high risk
+          }
+          
+          ctx.fillStyle = labelBgColor;
           ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
           
-          // Draw label border with distance-based color
-          ctx.strokeStyle = colors.stroke;
+          // Draw label border with risk-based color
+          ctx.strokeStyle = labelBorderColor;
           ctx.lineWidth = 2;
           ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
           
@@ -741,12 +939,22 @@ const ObjectDetectionCamera: React.FC = () => {
           ctx.fillStyle = '#FFFFFF';
           ctx.fillText(label, labelX + 8, labelY + 16);
           
-          // Draw distance priority indicator (colored dot with label)
+          // Draw enhanced distance priority indicator with risk level
           const dotSize = 6;
           const dotX = x + width - 12;
           const dotY = y + 12;
           
-          ctx.fillStyle = colors.stroke;
+          // Color the dot based on risk level
+          let dotColor = colors.stroke;
+          if (riskLevel === 'critical') {
+            dotColor = '#FF0000'; // Red for critical
+          } else if (riskLevel === 'high') {
+            dotColor = '#FF6600'; // Orange for high
+          } else if (riskLevel === 'medium') {
+            dotColor = '#FFCC00'; // Yellow for medium
+          }
+          
+          ctx.fillStyle = dotColor;
           ctx.beginPath();
           ctx.arc(dotX, dotY, dotSize, 0, 2 * Math.PI);
           ctx.fill();
@@ -756,25 +964,52 @@ const ObjectDetectionCamera: React.FC = () => {
           ctx.lineWidth = 1;
           ctx.stroke();
           
-          // Draw distance priority text
-          ctx.fillStyle = colors.stroke;
+          // Draw risk level indicator
+          ctx.fillStyle = dotColor;
           ctx.font = 'bold 10px Arial';
-          ctx.fillText(colors.label, dotX - 8, dotY + 4);
+          const riskText = riskLevel.toUpperCase();
+          ctx.fillText(riskText, dotX - 8, dotY + 4);
           
-          // Draw confidence indicator bar
-          const barWidth = 40;
-          const barHeight = 4;
-          const barX = x + 8;
-          const barY = y + height - 12;
+          // Draw velocity indicator bar
+          const velBarWidth = 50;
+          const velBarHeight = 4;
+          const velBarX = x + 8;
+          const velBarY = y + height - 20;
           
           // Background bar
           ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.fillRect(barX, barY, barWidth, barHeight);
+          ctx.fillRect(velBarX, velBarY, velBarWidth, velBarHeight);
+          
+          // Velocity level bar (normalized to 5 m/s max)
+          const normalizedVelocity = Math.min(velocity / 5, 1);
+          const velBarFillWidth = normalizedVelocity * velBarWidth;
+          
+          // Color based on velocity (green = slow, red = fast)
+          let velBarColor = '#00FF00'; // Green for slow
+          if (normalizedVelocity > 0.6) {
+            velBarColor = '#FFCC00'; // Yellow for medium
+          }
+          if (normalizedVelocity > 0.8) {
+            velBarColor = '#FF0000'; // Red for fast
+          }
+          
+          ctx.fillStyle = velBarColor;
+          ctx.fillRect(velBarX, velBarY, velBarFillWidth, velBarHeight);
+          
+          // Draw confidence indicator bar above velocity bar
+          const confBarWidth = 40;
+          const confBarHeight = 4;
+          const confBarX = x + 8;
+          const confBarY = y + height - 28;
+          
+          // Background bar
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(confBarX, confBarY, confBarWidth, confBarHeight);
           
           // Confidence level bar
-          const confidenceWidth = (confidence / 100) * barWidth;
+          const confidenceWidth = (confidence / 100) * confBarWidth;
           ctx.fillStyle = confidence >= 80 ? '#00FF00' : confidence >= 60 ? '#FFFF00' : '#FF0000';
-          ctx.fillRect(barX, barY, confidenceWidth, barHeight);
+          ctx.fillRect(confBarX, confBarY, confidenceWidth, confBarHeight);
           
           // Add focus button only when not in focus mode (enhanced design)
           if (!focusMode) {
@@ -921,6 +1156,26 @@ const ObjectDetectionCamera: React.FC = () => {
             <Focus className="w-4 h-4" />
             {focusMode ? 'Focus Mode On' : 'Focus Mode Off'}
           </Button>
+
+          <Button
+            onClick={() => setEnhancedTracking(!enhancedTracking)}
+            variant={enhancedTracking ? "default" : "outline"}
+            className="gap-2"
+            disabled={!isDetecting}
+          >
+            <Target className="w-4 h-4" />
+            {enhancedTracking ? 'Enhanced On' : 'Enhanced Off'}
+          </Button>
+
+          <Button
+            onClick={() => setProximityAlerts(!proximityAlerts)}
+            variant={proximityAlerts ? "default" : "outline"}
+            className="gap-2"
+            disabled={!isDetecting}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            {proximityAlerts ? 'Alerts On' : 'Alerts Off'}
+          </Button>
         </div>
       </div>
 
@@ -962,12 +1217,77 @@ const ObjectDetectionCamera: React.FC = () => {
         
         {/* Debug Info Overlay */}
         {isDetecting && (
-          <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white p-2 rounded text-xs z-20">
-            <div>Canvas: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</div>
-            <div>Video: {videoRef.current?.videoWidth || 0} x {videoRef.current?.videoHeight || 0}</div>
-            <div>Objects: {trackedObjects.length}</div>
-            <div>Stable: {trackedObjects.filter(obj => obj.stable).length}</div>
-            <div>FPS: {fps}</div>
+          <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white p-3 rounded text-xs z-20 max-w-64">
+            <div className="font-bold mb-2 border-b border-white/20 pb-1">📊 Live Status</div>
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>Canvas:</span>
+                <span>{canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Video:</span>
+                <span>{videoRef.current?.videoWidth || 0} x {videoRef.current?.videoHeight || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Objects:</span>
+                <span>{trackedObjects.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Stable:</span>
+                <span>{trackedObjects.filter(obj => obj.stable).length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>FPS:</span>
+                <span>{fps}</span>
+              </div>
+            </div>
+            
+            {/* Risk Assessment Summary */}
+            {trackedObjects.length > 0 && (
+              <div className="mt-3 pt-2 border-t border-white/20">
+                <div className="font-bold mb-1">⚠️ Risk Levels</div>
+                <div className="space-y-1 text-xs">
+                  {trackedObjects.filter(obj => obj.riskLevel === 'critical').length > 0 && (
+                    <div className="text-red-400">🔴 Critical: {trackedObjects.filter(obj => obj.riskLevel === 'critical').length}</div>
+                  )}
+                  {trackedObjects.filter(obj => obj.riskLevel === 'high').length > 0 && (
+                    <div className="text-orange-400">🟠 High: {trackedObjects.filter(obj => obj.riskLevel === 'high').length}</div>
+                  )}
+                  {trackedObjects.filter(obj => obj.riskLevel === 'medium').length > 0 && (
+                    <div className="text-yellow-400">🟡 Medium: {trackedObjects.filter(obj => obj.riskLevel === 'medium').length}</div>
+                  )}
+                  <div className="text-green-400">🟢 Safe: {trackedObjects.filter(obj => obj.riskLevel === 'low').length}</div>
+                </div>
+              </div>
+            )}
+            
+            {/* Movement Analysis */}
+            {trackedObjects.filter(obj => obj.velocity && obj.velocity > 0.5).length > 0 && (
+              <div className="mt-3 pt-2 border-t border-white/20">
+                <div className="font-bold mb-1">🚶 Movement</div>
+                <div className="space-y-1 text-xs">
+                  {trackedObjects.filter(obj => obj.movementDirection === 'approaching').length > 0 && (
+                    <div className="text-red-400">→ Approaching: {trackedObjects.filter(obj => obj.movementDirection === 'approaching').length}</div>
+                  )}
+                  {trackedObjects.filter(obj => obj.movementDirection === 'receding').length > 0 && (
+                    <div className="text-blue-400">← Receding: {trackedObjects.filter(obj => obj.movementDirection === 'receding').length}</div>
+                  )}
+                  {trackedObjects.filter(obj => obj.movementDirection === 'lateral').length > 0 && (
+                    <div className="text-yellow-400">↔ Lateral: {trackedObjects.filter(obj => obj.movementDirection === 'lateral').length}</div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Proximity Warnings */}
+            {trackedObjects.filter(obj => obj.proximityWarning).length > 0 && (
+              <div className="mt-3 pt-2 border-t border-red-400 border-opacity-50">
+                <div className="font-bold mb-1 text-red-400">🚨 Proximity Alerts</div>
+                <div className="text-red-300 text-xs">
+                  {trackedObjects.filter(obj => obj.proximityWarning).length} object(s) require immediate attention
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
