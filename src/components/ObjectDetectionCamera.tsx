@@ -771,37 +771,22 @@ const ObjectDetectionCamera: React.FC = () => {
         canvas.height = video.videoHeight;
         console.log('📐 Canvas resized to:', canvas.width, 'x', canvas.height);
         
-        // Also update the CSS dimensions to ensure proper overlay
-        canvas.style.width = video.videoWidth + 'px';
-        canvas.style.height = video.videoHeight + 'px';
+        // Ensure canvas CSS dimensions match video display size
+        const videoRect = video.getBoundingClientRect();
+        canvas.style.width = videoRect.width + 'px';
+        canvas.style.height = videoRect.height + 'px';
       }
 
       // Clear canvas efficiently
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Debug: Draw a test rectangle to verify canvas is working and positioned correctly
-      ctx.strokeStyle = '#FF0000';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(10, 10, 100, 50);
-      ctx.fillStyle = '#FF0000';
-      ctx.font = 'bold 16px Arial';
-      ctx.fillText('TEST', 15, 35);
-      
-      // Debug: Draw grid lines to verify canvas positioning
-      ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < canvas.width; i += 100) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, canvas.height);
-        ctx.stroke();
-      }
-      for (let i = 0; i < canvas.height; i += 100) {
-        ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(canvas.width, i);
-        ctx.stroke();
-      }
+      // Simple test to verify canvas is working - draw a small test box
+      ctx.strokeStyle = '#00FF00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, 20, 60, 40);
+      ctx.fillStyle = '#00FF00';
+      ctx.font = '12px Arial';
+      ctx.fillText('CANVAS OK', 25, 45);
 
       try {
         // Run object detection at controlled intervals with performance optimization
@@ -863,6 +848,8 @@ const ObjectDetectionCamera: React.FC = () => {
           : trackedObjects; // Show all objects, not just stable ones
         
         console.log('🎨 Drawing objects:', objectsToDraw.length, 'objects to draw');
+        console.log('🎨 Canvas dimensions:', canvas.width, 'x', canvas.height);
+        console.log('🎨 Video dimensions:', video.videoWidth, 'x', video.videoHeight);
         
         // Performance optimization: Limit rendering complexity for very high object counts
         const maxObjectsToRender = 50; // Prevent performance issues with too many objects
@@ -870,6 +857,13 @@ const ObjectDetectionCamera: React.FC = () => {
         
         if (objectsToDraw.length > maxObjectsToRender) {
           console.warn(`⚠️ Performance: Limiting rendering to ${maxObjectsToRender} objects out of ${objectsToDraw.length} detected`);
+        }
+        
+        // Draw a summary of what we're about to render
+        if (objectsToRender.length > 0) {
+          console.log('🎨 About to render objects:', objectsToRender.map(obj => `${obj.class} at (${obj.bbox[0]}, ${obj.bbox[1]})`));
+        } else {
+          console.log('🎨 No objects to render');
         }
         
         objectsToRender.forEach((trackedObject, index) => {
@@ -892,11 +886,11 @@ const ObjectDetectionCamera: React.FC = () => {
           if (trackedObject.focused) {
             ctx.strokeStyle = '#FFD700'; // Gold for focused objects
             ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-            ctx.lineWidth = 4; // Thicker lines for focused objects
+            ctx.lineWidth = 5; // Thicker lines for focused objects
           } else {
             ctx.strokeStyle = colors.stroke;
             ctx.fillStyle = colors.fill;
-            ctx.lineWidth = 3; // Standard line width
+            ctx.lineWidth = 4; // Thicker lines for better visibility
           }
           
           // Draw enhanced bounding box with fill - ensure it's around the object, not covering the whole canvas
@@ -904,9 +898,9 @@ const ObjectDetectionCamera: React.FC = () => {
           ctx.strokeRect(x, y, width, height);
           
           // Debug: Draw a small dot at the center of the bbox to verify positioning
-          ctx.fillStyle = '#00FF00';
+          ctx.fillStyle = '#FFFFFF'; // White dot for better visibility
           ctx.beginPath();
-          ctx.arc(x + width/2, y + height/2, 3, 0, 2 * Math.PI);
+          ctx.arc(x + width/2, y + height/2, 4, 0, 2 * Math.PI);
           ctx.fill();
           
           // Enhanced object information display
@@ -1241,7 +1235,6 @@ const ObjectDetectionCamera: React.FC = () => {
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full pointer-events-auto z-10"
           style={{ 
-            border: '2px solid red',
             position: 'absolute',
             top: 0,
             left: 0,
@@ -1322,6 +1315,25 @@ const ObjectDetectionCamera: React.FC = () => {
                 </div>
                 <div className="text-xs text-blue-300">
                   🎨 Canvas overlay: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}
+                </div>
+                <div className="text-xs text-yellow-300 mt-1">
+                  🔍 Detection active - Look for colored boxes around objects
+                </div>
+              </div>
+            )}
+            
+            {/* No Objects Detected Message */}
+            {trackedObjects.length === 0 && isDetecting && (
+              <div className="mt-3 pt-2 border-t border-yellow-400 border-opacity-50">
+                <div className="font-bold mb-1 text-yellow-400">🔍 No Objects Detected</div>
+                <div className="text-xs text-yellow-300">
+                  • Camera is active but no objects detected yet
+                </div>
+                <div className="text-xs text-yellow-300">
+                  • Try moving objects in front of camera
+                </div>
+                <div className="text-xs text-yellow-300">
+                  • Check console for detection logs
                 </div>
               </div>
             )}
