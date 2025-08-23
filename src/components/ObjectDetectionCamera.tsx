@@ -770,18 +770,38 @@ const ObjectDetectionCamera: React.FC = () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         console.log('📐 Canvas resized to:', canvas.width, 'x', canvas.height);
+        
+        // Also update the CSS dimensions to ensure proper overlay
+        canvas.style.width = video.videoWidth + 'px';
+        canvas.style.height = video.videoHeight + 'px';
       }
 
       // Clear canvas efficiently
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Debug: Draw a test rectangle to verify canvas is working
+      // Debug: Draw a test rectangle to verify canvas is working and positioned correctly
       ctx.strokeStyle = '#FF0000';
       ctx.lineWidth = 3;
       ctx.strokeRect(10, 10, 100, 50);
       ctx.fillStyle = '#FF0000';
       ctx.font = 'bold 16px Arial';
       ctx.fillText('TEST', 15, 35);
+      
+      // Debug: Draw grid lines to verify canvas positioning
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < canvas.width; i += 100) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+      for (let i = 0; i < canvas.height; i += 100) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+      }
 
       try {
         // Run object detection at controlled intervals with performance optimization
@@ -857,6 +877,13 @@ const ObjectDetectionCamera: React.FC = () => {
           const distance = trackedObject.distance || 0;
           
           console.log(`🎨 Drawing object ${index}:`, trackedObject.class, 'at', x, y, width, height, 'distance:', distance);
+          console.log(`🎨 Canvas dimensions:`, canvas.width, 'x', canvas.height);
+          console.log(`🎨 Bbox coordinates: x=${x}, y=${y}, w=${width}, h=${height}`);
+          
+          // Validate bbox coordinates to ensure they're within canvas bounds
+          if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
+            console.warn(`⚠️ Bbox coordinates out of bounds:`, { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
+          }
           
           // Get color coding based on distance
           const colors = getDistanceColor(distance);
@@ -872,9 +899,15 @@ const ObjectDetectionCamera: React.FC = () => {
             ctx.lineWidth = 3; // Standard line width
           }
           
-          // Draw enhanced bounding box with fill
+          // Draw enhanced bounding box with fill - ensure it's around the object, not covering the whole canvas
           ctx.fillRect(x, y, width, height);
           ctx.strokeRect(x, y, width, height);
+          
+          // Debug: Draw a small dot at the center of the bbox to verify positioning
+          ctx.fillStyle = '#00FF00';
+          ctx.beginPath();
+          ctx.arc(x + width/2, y + height/2, 3, 0, 2 * Math.PI);
+          ctx.fill();
           
           // Enhanced object information display
           const confidence = Math.round(trackedObject.confidence * 100);
@@ -1207,7 +1240,14 @@ const ObjectDetectionCamera: React.FC = () => {
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full pointer-events-auto z-10"
-          style={{ border: '2px solid red' }} // Debug: Add red border to see canvas
+          style={{ 
+            border: '2px solid red',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%'
+          }}
           onClick={(e) => {
             if (!focusMode) return;
             
@@ -1231,7 +1271,7 @@ const ObjectDetectionCamera: React.FC = () => {
           }}
         />
         
-        {/* Debug Info Overlay */}
+        {/* Enhanced Debug Info Overlay */}
         {isDetecting && (
           <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white p-3 rounded text-xs z-20 max-w-64">
             <div className="font-bold mb-2 border-b border-white/20 pb-1">📊 Live Status</div>
@@ -1243,6 +1283,10 @@ const ObjectDetectionCamera: React.FC = () => {
               <div className="flex justify-between">
                 <span>Video:</span>
                 <span>{videoRef.current?.videoWidth || 0} x {videoRef.current?.videoHeight || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Canvas Style:</span>
+                <span>{canvasRef.current?.style.width} x {canvasRef.current?.style.height}</span>
               </div>
               <div className="flex justify-between">
                 <span>Total Objects:</span>
@@ -1272,6 +1316,12 @@ const ObjectDetectionCamera: React.FC = () => {
                 </div>
                 <div className="text-xs text-green-300">
                   ✓ Real-time movement tracking
+                </div>
+                <div className="text-xs text-blue-300 mt-1">
+                  📍 Bounding boxes: {trackedObjects.length} objects
+                </div>
+                <div className="text-xs text-blue-300">
+                  🎨 Canvas overlay: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}
                 </div>
               </div>
             )}
