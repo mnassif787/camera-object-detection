@@ -237,15 +237,37 @@ const ObjectDetectionCamera: React.FC = () => {
         return;
       }
 
-      // Set canvas size to match video dimensions
+      // Ensure video has dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log('Waiting for video dimensions...');
+        animationRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      // Set canvas size to match video dimensions EXACTLY
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
+        console.log('Canvas resized to match video:', canvas.width, 'x', canvas.height);
       }
+
+      // Update canvas CSS dimensions to match video display size
+      const videoRect = video.getBoundingClientRect();
+      canvas.style.width = videoRect.width + 'px';
+      canvas.style.height = videoRect.height + 'px';
+      canvas.style.top = '0px';
+      canvas.style.left = '0px';
 
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw a test pattern to verify canvas is working
+      ctx.strokeStyle = '#00FF00';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(10, 10, 100, 50);
+      ctx.fillStyle = '#00FF00';
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText('CANVAS OK', 15, 40);
 
       try {
         // Run object detection at controlled intervals
@@ -287,29 +309,51 @@ const ObjectDetectionCamera: React.FC = () => {
           
           console.log(`Drawing object ${index}:`, detection.class, 'at', x, y, width, height, 'distance:', detection.distance);
           
-          // Draw bounding box with distance-based color
+          // Validate bbox coordinates
+          if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
+            console.warn('Bbox coordinates out of bounds:', { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
+            return;
+          }
+          
+          // Draw bounding box with distance-based color - make it VERY visible
           ctx.strokeStyle = color;
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 6; // Much thicker lines for better visibility
           ctx.strokeRect(x, y, width, height);
+          
+          // Add a bright border around the bbox for extra visibility
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x-2, y-2, width+4, height+4);
           
           // Draw label with object name + distance above the bounding box
           const label = `${detection.class} - ${detection.distance}m`;
           ctx.fillStyle = color;
-          ctx.font = 'bold 16px Arial';
+          ctx.font = 'bold 18px Arial'; // Larger font for better visibility
           
           // Position label above the object, or below if too close to top
-          const labelY = y > 20 ? y - 10 : y + height + 20;
+          const labelY = y > 25 ? y - 15 : y + height + 25;
           ctx.fillText(label, x, labelY);
           
-          // Add a small colored dot to indicate distance level
+          // Add a large colored dot to indicate distance level
           ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.arc(x + width - 10, y + 10, 6, 0, 2 * Math.PI);
+          ctx.arc(x + width - 15, y + 15, 8, 0, 2 * Math.PI);
           ctx.fill();
           
           // Add white border to the dot for better visibility
           ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // Draw a center marker dot for better object identification
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(x + width/2, y + height/2, 6, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          // Add colored border to center dot
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
           ctx.stroke();
         });
 
@@ -333,6 +377,48 @@ const ObjectDetectionCamera: React.FC = () => {
 
     detect();
   }, [detections, speakDetection, isDetecting]);
+
+  // Handle canvas positioning when video dimensions change
+  useEffect(() => {
+    const updateCanvasPosition = () => {
+      if (videoRef.current && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        
+        // Get video display dimensions
+        const videoRect = video.getBoundingClientRect();
+        
+        // Update canvas CSS to match video display size exactly
+        canvas.style.width = videoRect.width + 'px';
+        canvas.style.height = videoRect.height + 'px';
+        canvas.style.top = '0px';
+        canvas.style.left = '0px';
+        
+        console.log('Canvas positioned:', {
+          videoRect: { width: videoRect.width, height: videoRect.height },
+          canvasStyle: { width: canvas.style.width, height: canvas.style.height },
+          canvasSize: { width: canvas.width, height: canvas.height }
+        });
+      }
+    };
+
+    // Update position when video loads
+    if (videoRef.current) {
+      videoRef.current.addEventListener('loadedmetadata', updateCanvasPosition);
+      videoRef.current.addEventListener('resize', updateCanvasPosition);
+    }
+
+    // Initial update
+    updateCanvasPosition();
+
+    // Cleanup
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.removeEventListener('loadedmetadata', updateCanvasPosition);
+        videoRef.current.removeEventListener('resize', updateCanvasPosition);
+      }
+    };
+  }, [isDetecting]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -399,7 +485,9 @@ const ObjectDetectionCamera: React.FC = () => {
             top: 0,
             left: 0,
             width: '100%',
-            height: '100%'
+            height: '100%',
+            pointerEvents: 'auto',
+            zIndex: 10
           }}
         />
         
@@ -422,7 +510,31 @@ const ObjectDetectionCamera: React.FC = () => {
                 <span>Canvas:</span>
                 <span className="text-blue-400">{canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</span>
               </div>
+              <div className="flex justify-between">
+                <span>Video:</span>
+                <span className="text-purple-400">{videoRef.current?.videoWidth || 0} x {videoRef.current?.videoHeight || 0}</span>
+              </div>
             </div>
+            
+            {/* Detection Status */}
+            {detections.length > 0 ? (
+              <div className="mt-2 pt-2 border-t border-green-400 border-opacity-50">
+                <div className="text-xs text-green-300 font-bold">✅ Objects Detected!</div>
+                <div className="text-xs text-green-300">
+                  Look for colored boxes around objects
+                </div>
+                <div className="text-xs text-green-300">
+                  {detections.map(d => `${d.class} (${d.distance}m)`).join(', ')}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 pt-2 border-t border-yellow-400 border-opacity-50">
+                <div className="text-xs text-yellow-300">🔍 No Objects Detected</div>
+                <div className="text-xs text-yellow-300">
+                  Move objects in front of camera
+                </div>
+              </div>
+            )}
             
             {/* Distance Legend */}
             <div className="mt-2 pt-2 border-t border-white/20">
@@ -440,6 +552,17 @@ const ObjectDetectionCamera: React.FC = () => {
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   <span>Green: &gt;5m (Far)</span>
                 </div>
+              </div>
+            </div>
+            
+            {/* Canvas Status */}
+            <div className="mt-2 pt-2 border-t border-white/20">
+              <div className="text-xs font-bold mb-1">Canvas Status:</div>
+              <div className="text-xs text-green-300">
+                ✓ Overlay active
+              </div>
+              <div className="text-xs text-blue-300">
+                Look for green "CANVAS OK" box
               </div>
             </div>
           </div>
