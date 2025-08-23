@@ -254,63 +254,70 @@ function startDetection() {
         });
         
         lastDetectionTime = currentTime;
-        
-        // Draw bounding boxes and labels
-        detections.forEach((detection, index) => {
-          const [x, y, width, height] = detection.bbox;
-          const color = getDistanceColor(detection.distance);
-          
-          // Validate bbox coordinates
-          if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
-            console.warn('Bbox coordinates out of bounds:', { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
-            return;
-          }
-          
-          // Draw bounding box
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 3;
-          ctx.strokeRect(x, y, width, height);
-          
-          // Draw label background
-          const label = `${detection.class} (${detection.distance.toFixed(1)}m, ${detection.direction})`;
-          const labelPadding = 8;
-          const labelHeight = 20;
-          const labelWidth = ctx.measureText(label).width + labelPadding * 2;
-          
-          // Position label above the object, or below if too close to top
-          const labelY = y > labelHeight + 10 ? y - 10 : y + height + 10;
-          const labelX = x;
-          
-          // Label background
-          ctx.fillStyle = color + 'CC'; // Semi-transparent
-          ctx.fillRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
-          
-          // Label border
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
-          
-          // Label text
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 14px Arial';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(label, labelX + labelPadding, labelY - labelHeight/2 + 5);
-          
-          // Voice alerts with cooldown
-          const now = Date.now();
-          if (detection.distance < 5 && now - detection.lastAlertTime > 5000) {
-            const alertMessage = generateAlertMessage(detection);
-            speak(alertMessage);
-            detection.lastAlertTime = now;
-          }
-          
-          console.log(`Drew object ${index}: ${detection.class} at ${detection.distance.toFixed(1)}m ${detection.direction}`);
-        });
+        console.log(`Detection completed: ${detections.length} objects found`);
         
       } catch (error) {
         console.error('Detection error:', error);
       }
+    }
+
+    // Always draw current detections for smooth updates
+    if (detections.length > 0) {
+      console.log(`Drawing ${detections.length} objects...`);
+      
+      detections.forEach((detection, index) => {
+        const [x, y, width, height] = detection.bbox;
+        const color = getDistanceColor(detection.distance);
+        
+        // Validate bbox coordinates
+        if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
+          console.warn('Bbox coordinates out of bounds:', { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
+          return;
+        }
+        
+        // Draw bounding box
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, width, height);
+        
+        // Draw label background
+        const label = `${detection.class} (${detection.distance.toFixed(1)}m, ${detection.direction})`;
+        const labelPadding = 8;
+        const labelHeight = 20;
+        const labelWidth = ctx.measureText(label).width + labelPadding * 2;
+        
+        // Position label above the object, or below if too close to top
+        const labelY = y > labelHeight + 10 ? y - 10 : y + height + 10;
+        const labelX = x;
+        
+        // Label background
+        ctx.fillStyle = color + 'CC'; // Semi-transparent
+        ctx.fillRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
+        
+        // Label border
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
+        
+        // Label text
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, labelX + labelPadding, labelY - labelHeight/2 + 5);
+        
+        // Voice alerts with cooldown
+        const now = Date.now();
+        if (detection.distance < 5 && now - detection.lastAlertTime > 5000) {
+          const alertMessage = generateAlertMessage(detection);
+          speak(alertMessage);
+          detection.lastAlertTime = now;
+        }
+        
+        console.log(`Drew object ${index}: ${detection.class} at ${detection.distance.toFixed(1)}m ${detection.direction}`);
+      });
+    } else {
+      console.log('No objects to draw');
     }
 
     // Calculate FPS
@@ -328,6 +335,7 @@ function startDetection() {
     }
   };
 
+  // Start the detection loop
   detect(performance.now());
 }
 
