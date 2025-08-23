@@ -157,16 +157,38 @@ function stopCamera() {
   updateStatus();
 }
 
-// Load COCO-SSD model
+// Load COCO-SSD model with proper TensorFlow.js initialization
 async function loadModel() {
   try {
+    console.log('Initializing TensorFlow.js...');
+    statusDiv.textContent = 'Status: Initializing TensorFlow.js...';
+    
+    // Wait for TensorFlow.js to be ready
+    await tf.ready();
+    console.log('TensorFlow.js ready');
+    
+    // Set backend to CPU if WebGL is not available
+    console.log('Setting up backend...');
+    statusDiv.textContent = 'Status: Setting up backend...';
+    
+    try {
+      await tf.setBackend('webgl');
+      console.log('WebGL backend set successfully');
+    } catch (backendError) {
+      console.log('WebGL not available, falling back to CPU');
+      await tf.setBackend('cpu');
+      console.log('CPU backend set successfully');
+    }
+    
     console.log('Loading COCO-SSD model...');
+    statusDiv.textContent = 'Status: Loading COCO-SSD model...';
+    
     model = await cocoSsd.load();
     console.log('COCO-SSD model loaded successfully');
-    updateStatus();
+    statusDiv.textContent = 'Status: Model loaded successfully! Ready to start detection';
   } catch (error) {
     console.error('Error loading model:', error);
-    statusDiv.textContent = 'Error: Failed to load model';
+    statusDiv.textContent = `Error: ${error.message}. Try refreshing the page.`;
   }
 }
 
@@ -314,8 +336,9 @@ function updateStatus(fps = 0) {
   const fpsText = fps > 0 ? ` | FPS: ${fps}` : '';
   const objectsText = ` | Objects: ${detections.length}`;
   const modelText = ` | Model: ${model ? 'Ready' : 'Loading'}`;
+  const backendText = ` | Backend: ${tf.getBackend()}`;
   
-  statusDiv.textContent = `Status: ${isDetecting ? 'Detecting' : 'Stopped'}${fpsText}${objectsText}${modelText}`;
+  statusDiv.textContent = `Status: ${isDetecting ? 'Detecting' : 'Stopped'}${fpsText}${objectsText}${modelText}${backendText}`;
 }
 
 // Event listeners

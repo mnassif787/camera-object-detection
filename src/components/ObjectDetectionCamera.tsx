@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Camera, Square, Volume2, VolumeX } from 'lucide-react';
+import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 
 interface Detection {
@@ -28,6 +29,7 @@ const ObjectDetectionCamera: React.FC = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [fps, setFps] = useState(0);
+  const [loadingStatus, setLoadingStatus] = useState('Initializing...');
 
   // Constants
   const DETECTION_INTERVAL = 100; // ms
@@ -69,18 +71,42 @@ const ObjectDetectionCamera: React.FC = () => {
     'backpack': 0.5,    // 0.5 meters average height
   };
 
-  // Load COCO-SSD model
+  // Load COCO-SSD model with proper TensorFlow.js initialization
   useEffect(() => {
     const loadModel = async () => {
       try {
+        setLoadingStatus('Initializing TensorFlow.js...');
+        console.log('Initializing TensorFlow.js...');
+        
+        // Wait for TensorFlow.js to be ready
+        await tf.ready();
+        console.log('TensorFlow.js ready');
+        
+        // Set backend to CPU if WebGL is not available
+        setLoadingStatus('Setting up backend...');
+        console.log('Setting up backend...');
+        
+        try {
+          await tf.setBackend('webgl');
+          console.log('WebGL backend set successfully');
+        } catch (backendError) {
+          console.log('WebGL not available, falling back to CPU');
+          await tf.setBackend('cpu');
+          console.log('CPU backend set successfully');
+        }
+        
+        setLoadingStatus('Loading COCO-SSD model...');
         console.log('Loading COCO-SSD model...');
+        
         const model = await cocoSsd.load();
         modelRef.current = model;
         setModelLoaded(true);
         setIsLoading(false);
+        setLoadingStatus('Model loaded successfully!');
         console.log('COCO-SSD model loaded successfully');
       } catch (error) {
         console.error('Error loading model:', error);
+        setLoadingStatus(`Error: ${error.message}`);
         setIsLoading(false);
       }
     };
@@ -352,7 +378,13 @@ const ObjectDetectionCamera: React.FC = () => {
         <div className="p-8 text-center">
           <div className="w-12 h-12 mx-auto mb-4 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           <h2 className="text-xl font-semibold mb-2">Loading Detection Model</h2>
-          <p className="text-muted-foreground">Initializing TensorFlow.js and COCO-SSD model...</p>
+          <p className="text-muted-foreground">{loadingStatus}</p>
+          {loadingStatus.includes('Error') && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              <p>Try refreshing the page or check your internet connection.</p>
+              <p className="mt-2">If the problem persists, the model may be temporarily unavailable.</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -390,6 +422,7 @@ const ObjectDetectionCamera: React.FC = () => {
             <span>FPS: {fps}</span>
             <span>Objects: {detections.length}</span>
             <span>Model: {modelLoaded ? "Ready" : "Loading"}</span>
+            <span>Backend: {tf.getBackend()}</span>
           </div>
         </div>
       </div>
