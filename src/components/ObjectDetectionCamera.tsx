@@ -427,7 +427,7 @@ const ObjectDetectionCamera: React.FC = () => {
       ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 15, 110);
 
       // TEST: Draw a sample professional bounding box to verify styling works
-      if (detections.length === 0) {
+      if (detections.length === 0 && !isDetecting) {
         console.log('Drawing test object to verify enhanced styling...');
         
         // Test object at center of canvas
@@ -557,11 +557,22 @@ const ObjectDetectionCamera: React.FC = () => {
         if (currentTime - lastDetectionTime >= detectionInterval) {
           console.log('Running object detection...');
           
+          // Ensure video is ready and model is loaded
+          if (!video || !modelRef.current) {
+            console.log('Video or model not ready, skipping detection');
+            return;
+          }
+          
           const predictions = await modelRef.current.detect(video);
+          console.log('Raw predictions:', predictions);
+          
           const filteredPredictions = predictions.filter(prediction => prediction.score > 0.3);
+          console.log('Filtered predictions:', filteredPredictions);
           
           if (filteredPredictions.length > 0) {
             console.log('Objects detected:', filteredPredictions.map(p => `${p.class}:${Math.round(p.score*100)}%`));
+          } else {
+            console.log('No objects detected above threshold');
           }
           
           // Process detections with distance estimation and AI analysis
@@ -582,6 +593,8 @@ const ObjectDetectionCamera: React.FC = () => {
               aiAnalysis
             };
           });
+          
+          console.log('Processed detections:', newDetections);
           
           setDetections(newDetections);
           setAiAnalysisComplete(true);
@@ -774,6 +787,8 @@ const ObjectDetectionCamera: React.FC = () => {
               
               console.log(`Successfully drew NEW object ${index}: ${detection.class}`);
             });
+          } else {
+            console.log('No new objects detected in this frame');
           }
 
           // Also draw any existing detections from state (for persistence)
@@ -963,6 +978,8 @@ const ObjectDetectionCamera: React.FC = () => {
           } else {
             console.log('No existing detections to draw');
           }
+        } else {
+          console.log(`Detection interval not reached yet. Next detection in ${detectionInterval - (currentTime - lastDetectionTime)}ms`);
         }
       } catch (error) {
         console.error('Detection error:', error);
@@ -1032,6 +1049,31 @@ const ObjectDetectionCamera: React.FC = () => {
               AI Active
             </Button>
           )}
+          
+          {/* Debug Button */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              console.log('Debug: Current state:', {
+                isDetecting,
+                modelLoaded: !!modelRef.current,
+                videoReady: !!videoRef.current,
+                detections: detections.length,
+                lastDetectionTime,
+                currentTime: Date.now()
+              });
+              
+              // Force a detection cycle
+              if (modelRef.current && videoRef.current) {
+                console.log('Debug: Forcing detection cycle...');
+                lastDetectionTime = 0; // Reset detection timer
+              }
+            }}
+            className="gap-2 bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+          >
+            <Target className="w-4 h-4" />
+            Debug Detection
+          </Button>
         </div>
       </div>
 
