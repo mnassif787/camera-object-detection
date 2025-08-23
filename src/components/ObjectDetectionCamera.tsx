@@ -780,13 +780,14 @@ const ObjectDetectionCamera: React.FC = () => {
       // Clear canvas efficiently
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Simple test to verify canvas is working - draw a small test box
-      ctx.strokeStyle = '#00FF00';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(20, 20, 60, 40);
-      ctx.fillStyle = '#00FF00';
-      ctx.font = '12px Arial';
-      ctx.fillText('CANVAS OK', 25, 45);
+      // More visible test to verify canvas is working - draw a large test box
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 5;
+      ctx.strokeRect(50, 50, 200, 100);
+      ctx.fillStyle = '#FF0000';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText('CANVAS WORKING', 60, 110);
+      ctx.fillText(`Size: ${canvas.width}x${canvas.height}`, 60, 135);
 
       try {
         // Run object detection at controlled intervals with performance optimization
@@ -862,8 +863,25 @@ const ObjectDetectionCamera: React.FC = () => {
         // Draw a summary of what we're about to render
         if (objectsToRender.length > 0) {
           console.log('🎨 About to render objects:', objectsToRender.map(obj => `${obj.class} at (${obj.bbox[0]}, ${obj.bbox[1]})`));
+          
+          // Draw a summary box showing detected objects
+          ctx.strokeStyle = '#00FF00';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(10, 10, 300, 60);
+          ctx.fillStyle = '#00FF00';
+          ctx.font = 'bold 16px Arial';
+          ctx.fillText(`DETECTED: ${objectsToRender.length} objects`, 20, 35);
+          ctx.fillText(`Objects: ${objectsToRender.map(obj => obj.class).join(', ')}`, 20, 55);
         } else {
           console.log('🎨 No objects to render');
+          
+          // Draw a message when no objects are detected
+          ctx.strokeStyle = '#FFFF00';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(10, 10, 250, 40);
+          ctx.fillStyle = '#FFFF00';
+          ctx.font = 'bold 16px Arial';
+          ctx.fillText('NO OBJECTS DETECTED', 20, 35);
         }
         
         objectsToRender.forEach((trackedObject, index) => {
@@ -885,23 +903,28 @@ const ObjectDetectionCamera: React.FC = () => {
           // Set drawing styles based on focus and distance
           if (trackedObject.focused) {
             ctx.strokeStyle = '#FFD700'; // Gold for focused objects
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-            ctx.lineWidth = 5; // Thicker lines for focused objects
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+            ctx.lineWidth = 8; // Very thick lines for focused objects
           } else {
             ctx.strokeStyle = colors.stroke;
             ctx.fillStyle = colors.fill;
-            ctx.lineWidth = 4; // Thicker lines for better visibility
+            ctx.lineWidth = 6; // Very thick lines for better visibility
           }
           
           // Draw enhanced bounding box with fill - ensure it's around the object, not covering the whole canvas
           ctx.fillRect(x, y, width, height);
           ctx.strokeRect(x, y, width, height);
           
-          // Debug: Draw a small dot at the center of the bbox to verify positioning
+          // Debug: Draw a large dot at the center of the bbox to verify positioning
           ctx.fillStyle = '#FFFFFF'; // White dot for better visibility
           ctx.beginPath();
-          ctx.arc(x + width/2, y + height/2, 4, 0, 2 * Math.PI);
+          ctx.arc(x + width/2, y + height/2, 8, 0, 2 * Math.PI);
           ctx.fill();
+          
+          // Add a bright border around the bbox for extra visibility
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x-2, y-2, width+4, height+4);
           
           // Enhanced object information display
           const confidence = Math.round(trackedObject.confidence * 100);
@@ -1239,7 +1262,8 @@ const ObjectDetectionCamera: React.FC = () => {
             top: 0,
             left: 0,
             width: '100%',
-            height: '100%'
+            height: '100%',
+            pointerEvents: 'auto'
           }}
           onClick={(e) => {
             if (!focusMode) return;
@@ -1266,28 +1290,12 @@ const ObjectDetectionCamera: React.FC = () => {
         
         {/* Enhanced Debug Info Overlay */}
         {isDetecting && (
-          <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white p-3 rounded text-xs z-20 max-w-64">
-            <div className="font-bold mb-2 border-b border-white/20 pb-1">📊 Live Status</div>
+          <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white p-2 rounded text-xs z-20 max-w-48">
+            <div className="font-bold mb-1 border-b border-white/20 pb-1">📊 Status</div>
             <div className="space-y-1">
               <div className="flex justify-between">
-                <span>Canvas:</span>
-                <span>{canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Video:</span>
-                <span>{videoRef.current?.videoWidth || 0} x {videoRef.current?.videoHeight || 0}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Canvas Style:</span>
-                <span>{canvasRef.current?.style.width} x {canvasRef.current?.style.height}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Objects:</span>
+                <span>Objects:</span>
                 <span className="text-green-400 font-bold">{trackedObjects.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Stable Objects:</span>
-                <span>{trackedObjects.filter(obj => obj.stable).length}</span>
               </div>
               <div className="flex justify-between">
                 <span>FPS:</span>
@@ -1299,88 +1307,21 @@ const ObjectDetectionCamera: React.FC = () => {
             
             {/* Object Detection Summary */}
             {trackedObjects.length > 0 && (
-              <div className="mt-3 pt-2 border-t border-white/20">
-                <div className="font-bold mb-1">🎯 All Objects Framed</div>
+              <div className="mt-2 pt-1 border-t border-white/20">
                 <div className="text-xs text-green-300">
-                  ✓ Every detected object has a bounding box
-                </div>
-                <div className="text-xs text-green-300">
-                  ✓ Color-coded by distance (Red/Yellow/Green)
-                </div>
-                <div className="text-xs text-green-300">
-                  ✓ Real-time movement tracking
-                </div>
-                <div className="text-xs text-blue-300 mt-1">
-                  📍 Bounding boxes: {trackedObjects.length} objects
+                  ✓ {trackedObjects.length} objects framed
                 </div>
                 <div className="text-xs text-blue-300">
-                  🎨 Canvas overlay: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}
-                </div>
-                <div className="text-xs text-yellow-300 mt-1">
-                  🔍 Detection active - Look for colored boxes around objects
+                  🎨 Canvas: {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}
                 </div>
               </div>
             )}
             
             {/* No Objects Detected Message */}
-            {trackedObjects.length === 0 && isDetecting && (
-              <div className="mt-3 pt-2 border-t border-yellow-400 border-opacity-50">
-                <div className="font-bold mb-1 text-yellow-400">🔍 No Objects Detected</div>
+            {trackedObjects.length === 0 && (
+              <div className="mt-2 pt-1 border-t border-yellow-400 border-opacity-50">
                 <div className="text-xs text-yellow-300">
-                  • Camera is active but no objects detected yet
-                </div>
-                <div className="text-xs text-yellow-300">
-                  • Try moving objects in front of camera
-                </div>
-                <div className="text-xs text-yellow-300">
-                  • Check console for detection logs
-                </div>
-              </div>
-            )}
-            
-            {/* Risk Assessment Summary */}
-            {trackedObjects.length > 0 && (
-              <div className="mt-3 pt-2 border-t border-white/20">
-                <div className="font-bold mb-1">⚠️ Risk Levels</div>
-                <div className="space-y-1 text-xs">
-                  {trackedObjects.filter(obj => obj.riskLevel === 'critical').length > 0 && (
-                    <div className="text-red-400">🔴 Critical: {trackedObjects.filter(obj => obj.riskLevel === 'critical').length}</div>
-                  )}
-                  {trackedObjects.filter(obj => obj.riskLevel === 'high').length > 0 && (
-                    <div className="text-orange-400">🟠 High: {trackedObjects.filter(obj => obj.riskLevel === 'high').length}</div>
-                  )}
-                  {trackedObjects.filter(obj => obj.riskLevel === 'medium').length > 0 && (
-                    <div className="text-yellow-400">🟡 Medium: {trackedObjects.filter(obj => obj.riskLevel === 'medium').length}</div>
-                  )}
-                  <div className="text-green-400">🟢 Safe: {trackedObjects.filter(obj => obj.riskLevel === 'low').length}</div>
-                </div>
-              </div>
-            )}
-            
-            {/* Movement Analysis */}
-            {trackedObjects.filter(obj => obj.velocity && obj.velocity > 0.5).length > 0 && (
-              <div className="mt-3 pt-2 border-t border-white/20">
-                <div className="font-bold mb-1">🚶 Movement</div>
-                <div className="space-y-1 text-xs">
-                  {trackedObjects.filter(obj => obj.movementDirection === 'approaching').length > 0 && (
-                    <div className="text-red-400">→ Approaching: {trackedObjects.filter(obj => obj.movementDirection === 'approaching').length}</div>
-                  )}
-                  {trackedObjects.filter(obj => obj.movementDirection === 'receding').length > 0 && (
-                    <div className="text-blue-400">← Receding: {trackedObjects.filter(obj => obj.movementDirection === 'receding').length}</div>
-                  )}
-                  {trackedObjects.filter(obj => obj.movementDirection === 'lateral').length > 0 && (
-                    <div className="text-yellow-400">↔ Lateral: {trackedObjects.filter(obj => obj.movementDirection === 'lateral').length}</div>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Proximity Warnings */}
-            {trackedObjects.filter(obj => obj.proximityWarning).length > 0 && (
-              <div className="mt-3 pt-2 border-t border-red-400 border-opacity-50">
-                <div className="font-bold mb-1 text-red-400">🚨 Proximity Alerts</div>
-                <div className="text-red-300 text-xs">
-                  {trackedObjects.filter(obj => obj.proximityWarning).length} object(s) require immediate attention
+                  🔍 No objects detected
                 </div>
               </div>
             )}
