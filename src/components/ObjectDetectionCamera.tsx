@@ -502,6 +502,68 @@ const ObjectDetectionCamera: React.FC = () => {
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 12px Arial';
             ctx.fillText('🤖', x + 6, y + 15);
+            
+            // Draw AI Analysis Information ON SCREEN
+            const analysisX = x + width + 10;
+            const analysisY = y;
+            const analysisWidth = 200;
+            const analysisHeight = 120;
+            
+            // Analysis background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fillRect(analysisX, analysisY, analysisWidth, analysisHeight);
+            
+            // Analysis border
+            ctx.strokeStyle = aiColor;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(analysisX, analysisY, analysisWidth, analysisHeight);
+            
+            // Analysis title
+            ctx.fillStyle = aiColor;
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('🤖 AI ANALYSIS', analysisX + 5, analysisY + 20);
+            
+            // Object type and distance
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText(`${detection.class.toUpperCase()}`, analysisX + 5, analysisY + 35);
+            ctx.fillText(`${detection.distance}m away`, analysisX + 5, analysisY + 50);
+            
+            // Risk level with color coding
+            const riskText = `${detection.aiAnalysis.riskLevel.toUpperCase()} RISK`;
+            ctx.fillStyle = aiColor;
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText(riskText, analysisX + 5, analysisY + 65);
+            
+            // Key characteristics (first 2)
+            ctx.fillStyle = '#CCCCCC';
+            ctx.font = '10px Arial';
+            if (detection.aiAnalysis.characteristics.length > 0) {
+              ctx.fillText(detection.aiAnalysis.characteristics[0], analysisX + 5, analysisY + 80);
+            }
+            if (detection.aiAnalysis.characteristics.length > 1) {
+              ctx.fillText(detection.aiAnalysis.characteristics[1], analysisX + 5, analysisY + 95);
+            }
+            
+            // Top recommendation
+            if (detection.aiAnalysis.recommendations.length > 0) {
+              ctx.fillStyle = '#FFFF00';
+              ctx.font = 'bold 10px Arial';
+              ctx.fillText('💡 ' + detection.aiAnalysis.recommendations[0], analysisX + 5, analysisY + 110);
+            }
+            
+            // Add movement pattern if available
+            if (detection.aiAnalysis.movementPattern) {
+              ctx.fillStyle = '#00FFFF';
+              ctx.font = '10px Arial';
+              ctx.fillText('📊 ' + detection.aiAnalysis.movementPattern, analysisX + 5, analysisY + 125);
+            }
+            
+            // Add confidence indicator
+            const confidence = Math.round(detection.aiAnalysis.confidence * 100);
+            ctx.fillStyle = confidence > 80 ? '#00FF00' : confidence > 60 ? '#FFFF00' : '#FF0000';
+            ctx.font = 'bold 10px Arial';
+            ctx.fillText(`Confidence: ${confidence}%`, analysisX + 5, analysisY + 140);
           }
         });
 
@@ -687,7 +749,7 @@ const ObjectDetectionCamera: React.FC = () => {
               
               {/* Distance Legend */}
               <div className="pt-2 border-t border-white/20">
-                <div className="text-xs font-bold mb-2">Distance Colors:</div>
+                <div className="text-xs font-bold mb-1">Distance Colors:</div>
                 <div className="text-xs space-y-1">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -717,6 +779,50 @@ const ObjectDetectionCamera: React.FC = () => {
                   <div>✓ Context-aware recommendations</div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Floating Analysis Summary Panel - Always Visible */}
+        {isDetecting && detections.length > 0 && (
+          <div className="absolute top-2 right-2 bg-black bg-opacity-90 text-white p-3 rounded-lg text-sm z-20 max-w-64">
+            <div className="font-bold mb-2 border-b border-white/20 pb-1 flex items-center gap-2">
+              <Brain className="w-4 h-4 text-green-400" />
+              Live Analysis
+            </div>
+            
+            <div className="space-y-2">
+              {detections.slice(0, 3).map((detection, index) => (
+                <div key={index} className="text-xs bg-white/10 p-2 rounded border-l-2" 
+                     style={{ borderLeftColor: getDistanceColor(detection.distance) }}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white">{detection.class}</span>
+                    <span className="text-gray-300">{detection.distance}m</span>
+                  </div>
+                  {detection.aiAnalysis && (
+                    <div className="mt-1">
+                      <div className={`text-xs px-2 py-1 rounded inline-block ${
+                        detection.aiAnalysis.riskLevel === 'high' ? 'bg-red-500/20 text-red-300' :
+                        detection.aiAnalysis.riskLevel === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                        'bg-green-500/20 text-green-300'
+                      }`}>
+                        {detection.aiAnalysis.riskLevel.toUpperCase()}
+                      </div>
+                      {detection.aiAnalysis.recommendations.length > 0 && (
+                        <div className="text-xs text-yellow-300 mt-1">
+                          💡 {detection.aiAnalysis.recommendations[0]}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {detections.length > 3 && (
+                <div className="text-xs text-gray-400 text-center pt-1 border-t border-white/20">
+                  +{detections.length - 3} more objects analyzed
+                </div>
+              )}
             </div>
           </div>
         )}
