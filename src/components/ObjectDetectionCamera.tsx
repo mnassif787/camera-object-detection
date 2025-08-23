@@ -589,195 +589,380 @@ const ObjectDetectionCamera: React.FC = () => {
           
           // Debug: Log the new detections
           console.log('New detections set:', newDetections);
-        }
-
-        // Draw bounding boxes and labels for all detected objects
-        if (detections.length > 0) {
-          console.log(`Drawing ${detections.length} detected objects...`);
           
-          detections.forEach((detection, index) => {
-            const [x, y, width, height] = detection.bbox;
-            const color = getDistanceColor(detection.distance);
+          // IMPORTANT: Draw the new detections immediately instead of waiting for state update
+          if (newDetections.length > 0) {
+            console.log(`Drawing ${newDetections.length} newly detected objects...`);
             
-            console.log(`Drawing object ${index}:`, detection.class, 'at', x, y, width, height, 'distance:', detection.distance);
-            
-            // Validate bbox coordinates
-            if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
-              console.warn('Bbox coordinates out of bounds:', { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
-              return;
-            }
-            
-            // Enhanced Professional Bounding Box Drawing (YOLOv7 Style)
-            
-            // 1. Semi-transparent filled background for better visibility
-            ctx.fillStyle = color + '20'; // Very light color with transparency
-            ctx.fillRect(x, y, width, height);
-            
-            // 2. Main bounding box with professional styling
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(x, y, width, height);
-            
-            // 3. Inner highlight border for depth
-            ctx.strokeStyle = color + '80';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
-            
-            // 4. Corner indicators for professional look
-            const cornerSize = 8;
-            const cornerColor = color;
-            
-            // Top-left corner
-            ctx.strokeStyle = cornerColor;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(x, y + cornerSize);
-            ctx.lineTo(x, y);
-            ctx.lineTo(x + cornerSize, y);
-            ctx.stroke();
-            
-            // Top-right corner
-            ctx.beginPath();
-            ctx.moveTo(x + width - cornerSize, y);
-            ctx.lineTo(x + width, y);
-            ctx.lineTo(x + width, y + cornerSize);
-            ctx.stroke();
-            
-            // Bottom-left corner
-            ctx.beginPath();
-            ctx.moveTo(x, y + height - cornerSize);
-            ctx.lineTo(x, y + height);
-            ctx.lineTo(x + cornerSize, y + height);
-            ctx.stroke();
-            
-            // Bottom-right corner
-            ctx.beginPath();
-            ctx.moveTo(x + width - cornerSize, y + height);
-            ctx.lineTo(x + width, y + height);
-            ctx.lineTo(x + width, y + height - cornerSize);
-            ctx.stroke();
-            
-            // 5. Professional Label Background
-            const label = `${detection.class.toUpperCase()} ${detection.distance.toFixed(1)}m`;
-            const labelPadding = 8;
-            const labelHeight = 24;
-            const labelWidth = ctx.measureText(label).width + labelPadding * 2;
-            
-            // Position label above the object, or below if too close to top
-            const labelY = y > labelHeight + 10 ? y - 10 : y + height + 10;
-            const labelX = x;
-            
-            // Label background with rounded corners effect
-            ctx.fillStyle = color + 'F0'; // Solid color with slight transparency
-            ctx.fillRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
-            
-            // Label border
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.strokeRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
-            
-            // 6. Professional Text Rendering
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, labelX + labelPadding, labelY - labelHeight/2 + 5);
-            
-            // 7. Confidence Score Indicator (Professional Style)
-            const confidence = Math.round(detection.score * 100);
-            const confidenceColor = confidence > 80 ? '#00FF00' : confidence > 60 ? '#FFFF00' : '#FF0000';
-            
-            // Confidence circle
-            ctx.fillStyle = confidenceColor;
-            ctx.beginPath();
-            ctx.arc(x + width - 15, y + 15, 8, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Confidence border
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Confidence percentage
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 10px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(confidence.toString(), x + width - 15, y + 15);
-            
-            // 8. Distance Indicator (Professional Style)
-            const distanceDotSize = 6;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(x + 15, y + 15, distanceDotSize, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Distance dot border
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // 9. Object Type Icon (Professional Touch)
-            const iconSize = 16;
-            const iconX = x + width/2;
-            const iconY = y + height/2;
-            
-            // Icon background
-            ctx.fillStyle = color + '80';
-            ctx.fillRect(iconX - iconSize/2, iconY - iconSize/2, iconSize, iconSize);
-            
-            // Icon border
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(iconX - iconSize/2, iconY - iconSize/2, iconSize, iconSize);
-            
-            // Icon text (first letter of object class)
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 12px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(detection.class.charAt(0).toUpperCase(), iconX, iconY);
-            
-            // 10. Movement Tracking Lines (if available)
-            if (detection.aiAnalysis?.movementPattern) {
-              const centerX = x + width/2;
-              const centerY = y + height/2;
+            newDetections.forEach((detection, index) => {
+              const [x, y, width, height] = detection.bbox;
+              const color = getDistanceColor(detection.distance);
               
-              // Movement direction indicator
-              ctx.strokeStyle = '#00FFFF';
-              ctx.lineWidth = 2;
-              ctx.setLineDash([5, 5]);
+              console.log(`Drawing NEW object ${index}:`, detection.class, 'at', x, y, width, height, 'distance:', detection.distance);
               
-              if (detection.aiAnalysis.movementPattern.includes('left')) {
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.lineTo(centerX - 20, centerY);
-                ctx.stroke();
-              } else if (detection.aiAnalysis.movementPattern.includes('right')) {
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.lineTo(centerX + 20, centerY);
-                ctx.stroke();
-              } else if (detection.aiAnalysis.movementPattern.includes('up')) {
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.lineTo(centerX, centerY - 20);
-                ctx.stroke();
-              } else if (detection.aiAnalysis.movementPattern.includes('down')) {
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.lineTo(centerX, centerY + 20);
-                ctx.stroke();
+              // Validate bbox coordinates
+              if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
+                console.warn('Bbox coordinates out of bounds:', { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
+                return;
               }
               
-              ctx.setLineDash([]); // Reset line dash
-            }
+              // Enhanced Professional Bounding Box Drawing (YOLOv7 Style)
+              
+              // 1. Semi-transparent filled background for better visibility
+              ctx.fillStyle = color + '20'; // Very light color with transparency
+              ctx.fillRect(x, y, width, height);
+              
+              // 2. Main bounding box with professional styling
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 3;
+              ctx.strokeRect(x, y, width, height);
+              
+              // 3. Inner highlight border for depth
+              ctx.strokeStyle = color + '80';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
+              
+              // 4. Corner indicators for professional look
+              const cornerSize = 8;
+              const cornerColor = color;
+              
+              // Top-left corner
+              ctx.strokeStyle = cornerColor;
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.moveTo(x, y + cornerSize);
+              ctx.lineTo(x, y);
+              ctx.lineTo(x + cornerSize, y);
+              ctx.stroke();
+              
+              // Top-right corner
+              ctx.beginPath();
+              ctx.moveTo(x + width - cornerSize, y);
+              ctx.lineTo(x + width, y);
+              ctx.lineTo(x + width, y + cornerSize);
+              ctx.stroke();
+              
+              // Bottom-left corner
+              ctx.beginPath();
+              ctx.moveTo(x, y + height - cornerSize);
+              ctx.lineTo(x, y + height);
+              ctx.lineTo(x + cornerSize, y + height);
+              ctx.stroke();
+              
+              // Bottom-right corner
+              ctx.beginPath();
+              ctx.moveTo(x + width - cornerSize, y + height);
+              ctx.lineTo(x + width, y + height);
+              ctx.lineTo(x + width, y + height - cornerSize);
+              ctx.stroke();
+              
+              // 5. Professional Label Background
+              const label = `${detection.class.toUpperCase()} ${detection.distance.toFixed(1)}m`;
+              const labelPadding = 8;
+              const labelHeight = 24;
+              const labelWidth = ctx.measureText(label).width + labelPadding * 2;
+              
+              // Position label above the object, or below if too close to top
+              const labelY = y > labelHeight + 10 ? y - 10 : y + height + 10;
+              const labelX = x;
+              
+              // Label background with rounded corners effect
+              ctx.fillStyle = color + 'F0'; // Solid color with slight transparency
+              ctx.fillRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
+              
+              // Label border
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 2;
+              ctx.strokeRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
+              
+              // 6. Professional Text Rendering
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 14px Arial';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(label, labelX + labelPadding, labelY - labelHeight/2 + 5);
+              
+              // 7. Confidence Score Indicator (Professional Style)
+              const confidence = Math.round(detection.score * 100);
+              const confidenceColor = confidence > 80 ? '#00FF00' : confidence > 60 ? '#FFFF00' : '#FF0000';
+              
+              // Confidence circle
+              ctx.fillStyle = confidenceColor;
+              ctx.beginPath();
+              ctx.arc(x + width - 15, y + 15, 8, 0, 2 * Math.PI);
+              ctx.fill();
+              
+              // Confidence border
+              ctx.strokeStyle = '#FFFFFF';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              
+              // Confidence percentage
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 10px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(confidence.toString(), x + width - 15, y + 15);
+              
+              // 8. Distance Indicator (Professional Style)
+              const distanceDotSize = 6;
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(x + 15, y + 15, distanceDotSize, 0, 2 * Math.PI);
+              ctx.fill();
+              
+              // Distance dot border
+              ctx.strokeStyle = '#FFFFFF';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              
+              // 9. Object Type Icon (Professional Touch)
+              const iconSize = 16;
+              const iconX = x + width/2;
+              const iconY = y + height/2;
+              
+              // Icon background
+              ctx.fillStyle = color + '80';
+              ctx.fillRect(iconX - iconSize/2, iconY - iconSize/2, iconSize, iconSize);
+              
+              // Icon border
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 1;
+              ctx.strokeRect(iconX - iconSize/2, iconY - iconSize/2, iconSize, iconSize);
+              
+              // Icon text (first letter of object class)
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 12px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(detection.class.charAt(0).toUpperCase(), iconX, iconY);
+              
+              // 10. Movement Tracking Lines (if available)
+              if (detection.aiAnalysis?.movementPattern) {
+                const centerX = x + width/2;
+                const centerY = y + height/2;
+                
+                // Movement direction indicator
+                ctx.strokeStyle = '#00FFFF';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                
+                if (detection.aiAnalysis.movementPattern.includes('left')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX - 20, centerY);
+                  ctx.stroke();
+                } else if (detection.aiAnalysis.movementPattern.includes('right')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX + 20, centerY);
+                  ctx.stroke();
+                } else if (detection.aiAnalysis.movementPattern.includes('up')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX, centerY - 20);
+                  ctx.stroke();
+                } else if (detection.aiAnalysis.movementPattern.includes('down')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX, centerY + 20);
+                  ctx.stroke();
+                }
+                
+                ctx.setLineDash([]); // Reset line dash
+              }
+              
+              console.log(`Successfully drew NEW object ${index}: ${detection.class}`);
+            });
+          }
+
+          // Also draw any existing detections from state (for persistence)
+          if (detections.length > 0) {
+            console.log(`Drawing ${detections.length} existing detected objects...`);
             
-            console.log(`Successfully drew object ${index}: ${detection.class}`);
-          });
-        } else {
-          console.log('No detections to draw');
-        }
+            detections.forEach((detection, index) => {
+              const [x, y, width, height] = detection.bbox;
+              const color = getDistanceColor(detection.distance);
+              
+              console.log(`Drawing EXISTING object ${index}:`, detection.class, 'at', x, y, width, height, 'distance:', detection.distance);
+              
+              // Validate bbox coordinates
+              if (x < 0 || y < 0 || x + width > canvas.width || y + height > canvas.height) {
+                console.warn('Bbox coordinates out of bounds:', { x, y, width, height, canvasWidth: canvas.width, canvasHeight: canvas.height });
+                return;
+              }
+              
+              // Enhanced Professional Bounding Box Drawing (YOLOv7 Style)
+              
+              // 1. Semi-transparent filled background for better visibility
+              ctx.fillStyle = color + '20'; // Very light color with transparency
+              ctx.fillRect(x, y, width, height);
+              
+              // 2. Main bounding box with professional styling
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 3;
+              ctx.strokeRect(x, y, width, height);
+              
+              // 3. Inner highlight border for depth
+              ctx.strokeStyle = color + '80';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
+              
+              // 4. Corner indicators for professional look
+              const cornerSize = 8;
+              const cornerColor = color;
+              
+              // Top-left corner
+              ctx.strokeStyle = cornerColor;
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.moveTo(x, y + cornerSize);
+              ctx.lineTo(x, y);
+              ctx.lineTo(x + cornerSize, y);
+              ctx.stroke();
+              
+              // Top-right corner
+              ctx.beginPath();
+              ctx.moveTo(x + width - cornerSize, y);
+              ctx.lineTo(x + width, y);
+              ctx.lineTo(x + width, y + cornerSize);
+              ctx.stroke();
+              
+              // Bottom-left corner
+              ctx.beginPath();
+              ctx.moveTo(x, y + height - cornerSize);
+              ctx.lineTo(x, y + height);
+              ctx.lineTo(x + cornerSize, y + height);
+              ctx.stroke();
+              
+              // Bottom-right corner
+              ctx.beginPath();
+              ctx.moveTo(x + width - cornerSize, y + height);
+              ctx.lineTo(x + width, y + height);
+              ctx.lineTo(x + width, y + height - cornerSize);
+              ctx.stroke();
+              
+              // 5. Professional Label Background
+              const label = `${detection.class.toUpperCase()} ${detection.distance.toFixed(1)}m`;
+              const labelPadding = 8;
+              const labelHeight = 24;
+              const labelWidth = ctx.measureText(label).width + labelPadding * 2;
+              
+              // Position label above the object, or below if too close to top
+              const labelY = y > labelHeight + 10 ? y - 10 : y + height + 10;
+              const labelX = x;
+              
+              // Label background with rounded corners effect
+              ctx.fillStyle = color + 'F0'; // Solid color with slight transparency
+              ctx.fillRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
+              
+              // Label border
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 2;
+              ctx.strokeRect(labelX, labelY - labelHeight + 5, labelWidth, labelHeight);
+              
+              // 6. Professional Text Rendering
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 14px Arial';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(label, labelX + labelPadding, labelY - labelHeight/2 + 5);
+              
+              // 7. Confidence Score Indicator (Professional Style)
+              const confidence = Math.round(detection.score * 100);
+              const confidenceColor = confidence > 80 ? '#00FF00' : confidence > 60 ? '#FFFF00' : '#FF0000';
+              
+              // Confidence circle
+              ctx.fillStyle = confidenceColor;
+              ctx.beginPath();
+              ctx.arc(x + width - 15, y + 15, 8, 0, 2 * Math.PI);
+              ctx.fill();
+              
+              // Confidence border
+              ctx.strokeStyle = '#FFFFFF';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              
+              // Confidence percentage
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 10px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(confidence.toString(), x + width - 15, y + 15);
+              
+              // 8. Distance Indicator (Professional Style)
+              const distanceDotSize = 6;
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(x + 15, y + 15, distanceDotSize, 0, 2 * Math.PI);
+              ctx.fill();
+              
+              // Distance dot border
+              ctx.strokeStyle = '#FFFFFF';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              
+              // 9. Object Type Icon (Professional Touch)
+              const iconSize = 16;
+              const iconX = x + width/2;
+              const iconY = y + height/2;
+              
+              // Icon background
+              ctx.fillStyle = color + '80';
+              ctx.fillRect(iconX - iconSize/2, iconY - iconSize/2, iconSize, iconSize);
+              
+              // Icon border
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 1;
+              ctx.strokeRect(iconX - iconSize/2, iconY - iconSize/2, iconSize, iconSize);
+              
+              // Icon text (first letter of object class)
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 12px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(detection.class.charAt(0).toUpperCase(), iconX, iconY);
+              
+              // 10. Movement Tracking Lines (if available)
+              if (detection.aiAnalysis?.movementPattern) {
+                const centerX = x + width/2;
+                const centerY = y + height/2;
+                
+                // Movement direction indicator
+                ctx.strokeStyle = '#00FFFF';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                
+                if (detection.aiAnalysis.movementPattern.includes('left')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX - 20, centerY);
+                  ctx.stroke();
+                } else if (detection.aiAnalysis.movementPattern.includes('right')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX + 20, centerY);
+                  ctx.stroke();
+                } else if (detection.aiAnalysis.movementPattern.includes('up')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX, centerY - 20);
+                  ctx.stroke();
+                } else if (detection.aiAnalysis.movementPattern.includes('down')) {
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.lineTo(centerX, centerY + 20);
+                  ctx.stroke();
+                }
+                
+                ctx.setLineDash([]); // Reset line dash
+              }
+              
+              console.log(`Successfully drew EXISTING object ${index}: ${detection.class}`);
+            });
+          } else {
+            console.log('No existing detections to draw');
+          }
 
       } catch (error) {
         console.error('Detection error:', error);
