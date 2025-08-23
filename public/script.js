@@ -128,8 +128,8 @@ async function startCamera() {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 720, max: 1080 },
+        width: { ideal: 640, max: 1280 },
+        height: { ideal: 480, max: 720 },
         frameRate: { ideal: 30, max: 30 }
       }
     });
@@ -188,7 +188,7 @@ function startDetection() {
   isDetecting = true;
   
   let lastDetectionTime = 0;
-  const detectionInterval = 100; // Run detection every 100ms for smooth 30+ FPS
+  const detectionInterval = 200; // Run detection every 200ms for smooth 30+ FPS
   
   function detect() {
     if (!isDetecting) return;
@@ -253,16 +253,11 @@ function startDetection() {
       const labelY = y > 20 ? y - 10 : y + height + 20;
       ctx.fillText(label, x, labelY);
       
-      // Add a small colored dot to indicate distance level
+      // Add a colored dot to indicate distance level
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x + width - 10, y + 10, 6, 0, 2 * Math.PI);
+      ctx.arc(x + width - 10, y + 10, 5, 0, 2 * Math.PI);
       ctx.fill();
-      
-      // Add white border to the dot for better visibility
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1;
-      ctx.stroke();
     });
     
     // Continue loop for real-time updates
