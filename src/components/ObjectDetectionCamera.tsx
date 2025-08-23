@@ -88,19 +88,33 @@ const ObjectDetectionCamera: React.FC = () => {
     initializeTensorFlow();
   }, [toast]);
 
-  // Start camera
+  // Start camera with enhanced mobile optimization
   const startCamera = useCallback(async () => {
     try {
-      console.log('Starting camera...');
-      const stream = await navigator.mediaDevices.getUserMedia({
+      console.log('Starting camera with enhanced mobile optimization...');
+      
+      // Enhanced video constraints for better mobile performance
+      const constraints = {
         video: {
-          facingMode: 'environment',
-          width: { ideal: 640, max: 640 },
-          height: { ideal: 480, max: 480 },
-          frameRate: { ideal: 30, max: 30 }
+          facingMode: 'environment', // Use back camera on mobile
+          width: { ideal: 1280, max: 1920 }, // Higher resolution for better detection
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 30 },
+          // Mobile-specific optimizations
+          aspectRatio: { ideal: 16/9 },
+          // Enable advanced features if available
+          advanced: [
+            { exposureMode: 'continuous' },
+            { focusMode: 'continuous' },
+            { whiteBalanceMode: 'continuous' },
+            { exposureTime: { min: 0, max: 1000 } },
+            { iso: { min: 100, max: 800 } }
+          ]
         }
-      });
-      console.log('Camera stream obtained:', stream);
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('Enhanced camera stream obtained:', stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -118,13 +132,36 @@ const ObjectDetectionCamera: React.FC = () => {
             }, 100);
           }
         };
+        
+        // Enhanced error handling for mobile devices
+        videoRef.current.onerror = (error) => {
+          console.error('Video playback error:', error);
+          toast({
+            variant: "destructive",
+            title: "Video Error",
+            description: "Camera stream playback failed. Please refresh and try again.",
+          });
+        };
       }
     } catch (error) {
       console.error('Camera access error:', error);
+      
+      // Enhanced error messages for different failure types
+      let errorMessage = "Unable to access camera. Please check permissions.";
+      if (error.name === 'NotAllowedError') {
+        errorMessage = "Camera access denied. Please allow camera permissions and refresh.";
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = "No camera found on this device.";
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = "Camera not supported on this device or browser.";
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = "Camera is in use by another application.";
+      }
+      
       toast({
         variant: "destructive",
-        title: "Camera Access",
-        description: "Unable to access camera. Please check permissions.",
+        title: "Camera Access Error",
+        description: errorMessage,
       });
     }
   }, [toast]);
@@ -142,11 +179,11 @@ const ObjectDetectionCamera: React.FC = () => {
     setDetections([]);
   }, []);
 
-  // Enhanced distance estimation using triangle similarity
+  // Enhanced distance estimation using triangle similarity with improved accuracy
   const estimateDistance = (bbox: [number, number, number, number], className: string): number => {
     const [x, y, width, height] = bbox;
     
-    // More accurate real-world dimensions (in meters) based on common object sizes
+    // Enhanced real-world dimensions (in meters) based on common object sizes
     const objectDimensions: { [key: string]: { width: number; height: number } } = {
       'person': { width: 0.45, height: 1.7 },
       'car': { width: 1.8, height: 1.5 },
@@ -170,11 +207,67 @@ const ObjectDetectionCamera: React.FC = () => {
       'bowl': { width: 0.15, height: 0.08 },
       'apple': { width: 0.08, height: 0.08 },
       'banana': { width: 0.03, height: 0.18 },
+      'airplane': { width: 35.0, height: 12.0 },
+      'train': { width: 3.0, height: 4.0 },
+      'boat': { width: 2.0, height: 1.5 },
+      'fire hydrant': { width: 0.3, height: 0.8 },
+      'stop sign': { width: 0.3, height: 0.3 },
+      'parking meter': { width: 0.2, height: 1.0 },
+      'bench': { width: 1.5, height: 0.5 },
+      'bird': { width: 0.15, height: 0.25 },
+      'horse': { width: 1.0, height: 1.8 },
+      'sheep': { width: 0.8, height: 1.2 },
+      'cow': { width: 1.2, height: 1.4 },
+      'elephant': { width: 2.5, height: 3.0 },
+      'bear': { width: 1.5, height: 2.0 },
+      'zebra': { width: 1.0, height: 1.8 },
+      'giraffe': { width: 0.8, height: 4.5 },
+      'backpack': { width: 0.3, height: 0.5 },
+      'umbrella': { width: 0.8, height: 1.2 },
+      'handbag': { width: 0.3, height: 0.4 },
+      'suitcase': { width: 0.5, height: 0.3 },
+      'frisbee': { width: 0.25, height: 0.25 },
+      'skis': { width: 0.1, height: 1.7 },
+      'snowboard': { width: 0.3, height: 1.5 },
+      'sports ball': { width: 0.22, height: 0.22 },
+      'kite': { width: 0.8, height: 0.6 },
+      'baseball bat': { width: 0.05, height: 0.9 },
+      'baseball glove': { width: 0.25, height: 0.25 },
+      'skateboard': { width: 0.8, height: 0.2 },
+      'surfboard': { width: 2.0, height: 0.6 },
+      'tennis racket': { width: 0.3, height: 0.7 },
+      'wine glass': { width: 0.08, height: 0.15 },
+      'fork': { width: 0.02, height: 0.2 },
+      'knife': { width: 0.02, height: 0.2 },
+      'spoon': { width: 0.02, height: 0.2 },
+      'sandwich': { width: 0.15, height: 0.08 },
+      'orange': { width: 0.08, height: 0.08 },
+      'broccoli': { width: 0.15, height: 0.2 },
+      'carrot': { width: 0.03, height: 0.2 },
+      'hot dog': { width: 0.15, height: 0.08 },
+      'pizza': { width: 0.3, height: 0.3 },
+      'donut': { width: 0.1, height: 0.1 },
+      'cake': { width: 0.25, height: 0.1 },
+      'bed': { width: 1.4, height: 2.0 },
+      'dining table': { width: 1.8, height: 0.75 },
+      'toilet': { width: 0.4, height: 0.7 },
+      'remote': { width: 0.15, height: 0.05 },
+      'microwave': { width: 0.5, height: 0.3 },
+      'oven': { width: 0.6, height: 0.6 },
+      'toaster': { width: 0.3, height: 0.25 },
+      'sink': { width: 0.5, height: 0.2 },
+      'refrigerator': { width: 0.8, height: 1.8 },
+      'clock': { width: 0.3, height: 0.3 },
+      'vase': { width: 0.15, height: 0.3 },
+      'scissors': { width: 0.15, height: 0.05 },
+      'teddy bear': { width: 0.3, height: 0.4 },
+      'hair drier': { width: 0.2, height: 0.3 },
+      'toothbrush': { width: 0.02, height: 0.2 },
     };
 
     const objDims = objectDimensions[className] || { width: 0.5, height: 0.5 };
     
-    // More realistic focal length for mobile cameras (typically 24-28mm equivalent)
+    // Optimized focal length for mobile cameras (typically 24-28mm equivalent)
     // This translates to ~600-700 pixels for a standard mobile camera sensor
     const focalLength = 650;
     
@@ -182,14 +275,13 @@ const ObjectDetectionCamera: React.FC = () => {
     const widthDistance = (objDims.width * focalLength) / width;
     const heightDistance = (objDims.height * focalLength) / height;
     
-    // For most objects, height is more reliable due to consistent orientation
-    // But for some objects like bottles, cars, etc., width might be better
-    const reliableHeightObjects = ['person', 'bottle', 'cup', 'chair', 'dog', 'cat'];
+    // Enhanced object classification for distance calculation
+    const reliableHeightObjects = ['person', 'bottle', 'cup', 'chair', 'dog', 'cat', 'fire hydrant', 'parking meter', 'bench', 'bird', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'skis', 'baseball bat', 'surfboard', 'tennis racket', 'fork', 'knife', 'spoon', 'carrot', 'bed', 'toilet', 'refrigerator', 'vase', 'teddy bear', 'toothbrush'];
     const useHeight = reliableHeightObjects.includes(className);
     
     const distance = useHeight ? heightDistance : Math.min(widthDistance, heightDistance);
     
-    // More realistic distance bounds with logarithmic scaling for very close/far objects
+    // Enhanced distance bounds with logarithmic scaling for very close/far objects
     let adjustedDistance = distance;
     if (distance < 0.5) adjustedDistance = 0.5; // Minimum 50cm
     if (distance > 50) adjustedDistance = 50; // Maximum 50m
@@ -200,15 +292,51 @@ const ObjectDetectionCamera: React.FC = () => {
     return Math.max(0.3, Math.min(50, adjustedDistance));
   };
 
-  // Determine direction based on bounding box position
+  // Enhanced direction detection with more precise zones
   const getDirection = (bbox: [number, number, number, number], canvasWidth: number): 'left' | 'center' | 'right' => {
     const [x, y, width] = bbox;
     const centerX = x + width / 2;
-    const threshold = canvasWidth * 0.33;
+    const leftThreshold = canvasWidth * 0.33;
+    const rightThreshold = canvasWidth * 0.67;
     
-    if (centerX < threshold) return 'left';
-    if (centerX > canvasWidth - threshold) return 'right';
+    if (centerX < leftThreshold) return 'left';
+    if (centerX > rightThreshold) return 'right';
     return 'center';
+  };
+
+  // Enhanced color coding based on distance with better visual distinction
+  const getDistanceColor = (distance: number): { stroke: string; fill: string; label: string } => {
+    if (distance < 3) {
+      return { 
+        stroke: '#FF4444', // Bright red for very close objects
+        fill: 'rgba(255, 68, 68, 0.2)', 
+        label: 'DANGER' 
+      };
+    } else if (distance < 5) {
+      return { 
+        stroke: '#FF8800', // Orange for close objects
+        fill: 'rgba(255, 136, 0, 0.2)', 
+        label: 'CLOSE' 
+      };
+    } else if (distance < 10) {
+      return { 
+        stroke: '#FFCC00', // Yellow for medium distance
+        fill: 'rgba(255, 204, 0, 0.2)', 
+        label: 'MEDIUM' 
+      };
+    } else if (distance < 20) {
+      return { 
+        stroke: '#00CC00', // Green for safe distance
+        fill: 'rgba(0, 204, 0, 0.2)', 
+        label: 'SAFE' 
+      };
+    } else {
+      return { 
+        stroke: '#0088CC', // Blue for far objects
+        fill: 'rgba(0, 136, 204, 0.2)', 
+        label: 'FAR' 
+      };
+    }
   };
 
   // Object tracking and stability functions
@@ -234,34 +362,41 @@ const ObjectDetectionCamera: React.FC = () => {
     const currentTracked = [...trackedObjects];
     const updatedTracked: TrackedObject[] = [];
     
-    // Process new detections
+    // Process new detections with enhanced matching
     newDetections.forEach(detection => {
       let bestMatch: TrackedObject | null = null;
-      let bestIoU = 0.3; // Minimum IoU threshold for matching
+      let bestIoU = 0.25; // Lowered threshold for better matching
+      let bestDistance = Infinity;
       
-      // Find best matching tracked object
+      // Find best matching tracked object using both IoU and distance
       currentTracked.forEach((tracked, index) => {
         if (tracked.class === detection.class) {
           const iou = calculateIoU(tracked.bbox, detection.bbox);
-          if (iou > bestIoU) {
-            bestIoU = iou;
-            bestMatch = tracked;
+          const distanceDiff = Math.abs((tracked.distance || 0) - (detection.distance || 0));
+          
+          // Enhanced matching: prefer high IoU but also consider distance consistency
+          if (iou > bestIoU || (iou > 0.15 && distanceDiff < 2)) {
+            if (iou > bestIoU || (iou === bestIoU && distanceDiff < bestDistance)) {
+              bestIoU = iou;
+              bestDistance = distanceDiff;
+              bestMatch = tracked;
+            }
           }
         }
       });
       
       if (bestMatch) {
-        // Update existing tracked object
+        // Update existing tracked object with enhanced stability
         const updated = {
           ...bestMatch,
           bbox: detection.bbox,
           score: detection.score,
           distance: detection.distance,
           direction: detection.direction,
-          confidence: Math.min(1, bestMatch.confidence + 0.1),
+          confidence: Math.min(1, bestMatch.confidence + 0.15), // Faster confidence building
           lastSeen: now,
           frameCount: bestMatch.frameCount + 1,
-          stable: bestMatch.frameCount >= 2, // Object is stable after 2 frames instead of 3
+          stable: bestMatch.frameCount >= 2, // Object is stable after 2 frames
         };
         updatedTracked.push(updated);
         
@@ -269,15 +404,15 @@ const ObjectDetectionCamera: React.FC = () => {
         const index = currentTracked.findIndex(t => t.id === bestMatch!.id);
         if (index > -1) currentTracked.splice(index, 1);
       } else {
-        // Create new tracked object
+        // Create new tracked object with enhanced initialization
         const newTracked: TrackedObject = {
-          id: `${detection.class}-${Date.now()}-${Math.random()}`,
+          id: `${detection.class}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           class: detection.class,
           bbox: detection.bbox,
           score: detection.score,
           distance: detection.distance,
           direction: detection.direction,
-          confidence: 0.5,
+          confidence: 0.6, // Higher initial confidence
           lastSeen: now,
           frameCount: 1,
           stable: false,
@@ -287,18 +422,30 @@ const ObjectDetectionCamera: React.FC = () => {
       }
     });
     
-    // Keep old tracked objects for a short time (for stability)
+    // Enhanced persistence logic for tracked objects
     currentTracked.forEach(tracked => {
       const timeSinceLastSeen = now - tracked.lastSeen;
-      if (timeSinceLastSeen < 1000 && tracked.frameCount > 1) { // Keep for 1 second if seen multiple times
+      const maxPersistenceTime = tracked.frameCount > 3 ? 2000 : 1000; // Longer persistence for stable objects
+      
+      if (timeSinceLastSeen < maxPersistenceTime) {
+        // Gradually reduce confidence but maintain object for stability
+        const confidenceDecay = tracked.frameCount > 2 ? 0.02 : 0.05; // Slower decay for stable objects
         updatedTracked.push({
           ...tracked,
-          confidence: Math.max(0, tracked.confidence - 0.05), // Gradually reduce confidence
+          confidence: Math.max(0, tracked.confidence - confidenceDecay),
+          // Maintain focus state if object was focused
+          focused: tracked.focused && tracked.confidence > 0.3,
         });
       }
     });
     
-    return updatedTracked;
+    // Sort by confidence and recency for better display priority
+    return updatedTracked.sort((a, b) => {
+      if (a.focused !== b.focused) return a.focused ? -1 : 1;
+      if (a.stable !== b.stable) return a.stable ? -1 : 1;
+      if (Math.abs(a.confidence - b.confidence) > 0.1) return b.confidence - a.confidence;
+      return b.lastSeen - a.lastSeen;
+    });
   };
 
   // Focus on specific object
@@ -318,63 +465,55 @@ const ObjectDetectionCamera: React.FC = () => {
     }
   }, [trackedObjects, speechEnabled]);
 
-  // Text-to-speech functionality using Web Speech API
+  // Enhanced voice alerts with better cooldown and directional awareness
   const speakDetection = useCallback((trackedObject: TrackedObject) => {
-    if (!speechEnabled || !window.speechSynthesis) return;
+    if (!speechEnabled) return;
     
     const now = Date.now();
     const objectKey = `${trackedObject.class}-${trackedObject.direction}`;
-    const timeSinceLastSpoken = now - (lastSpokenTime[objectKey] || 0);
+    const cooldown = 5000; // 5 second cooldown per object-direction combination
     
-    // Increased cooldown to 3 seconds for more focused speech
-    if (timeSinceLastSpoken < 3000) return;
-    
-    // Only speak about stable objects (seen for at least 3 frames)
-    if (!trackedObject.stable) return;
-    
-    // Cancel any ongoing speech for immediate response
-    window.speechSynthesis.cancel();
+    if (lastSpokenTime[objectKey] && (now - lastSpokenTime[objectKey]) < cooldown) {
+      return;
+    }
     
     const distance = Math.round(trackedObject.distance || 0);
     const direction = trackedObject.direction;
+    const className = trackedObject.class;
     
-    // Create more focused speech messages
+    // Enhanced alert messages with better context
     let message = '';
-    if (trackedObject.focused) {
-      // Enhanced speech for focused objects
-      if (distance < 2) {
-        message = `Focused on ${trackedObject.class}, ${direction}, very close at ${distance} meters`;
-      } else if (distance < 5) {
-        message = `Focused on ${trackedObject.class}, ${direction}, ${distance} meters away`;
-      } else {
-        message = `Focused on ${trackedObject.class}, ${direction}, ${distance} meters away`;
-      }
+    if (distance < 3) {
+      message = `⚠️ ${className} very close! ${distance} meters ${direction}. Immediate attention required.`;
+    } else if (distance < 5) {
+      message = `${className} approaching ${distance} meters ${direction}. Stay alert.`;
+    } else if (distance < 10) {
+      message = `${className} detected ${distance} meters ${direction}.`;
     } else {
-      // Regular speech for stable objects
-      if (distance < 2) {
-        message = `${trackedObject.class}, ${direction}, very close`;
-      } else if (distance < 5) {
-        message = `${trackedObject.class}, ${direction}, ${distance} meters`;
-      } else {
-        message = `${trackedObject.class}, ${direction}, ${distance} meters`;
-      }
+      message = `${className} ${distance} meters ${direction}.`;
     }
     
-    // Create and configure speech for better delivery
+    // Enhanced speech synthesis with better voice and rate
     const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = 1.0; // Normal speech rate for clarity
-    utterance.pitch = 1.0;
-    utterance.volume = 0.9;
+    utterance.rate = 0.9; // Slightly slower for clarity
+    utterance.pitch = 1.1; // Slightly higher pitch for attention
+    utterance.volume = 0.8; // Good volume level
     
-    // Speak the message
+    // Try to use a better voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(voice => 
+      voice.lang.startsWith('en') && voice.name.includes('Google')
+    ) || voices.find(voice => voice.lang.startsWith('en'));
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    
     window.speechSynthesis.speak(utterance);
+    setLastSpokenTime(prev => ({ ...prev, [objectKey]: now }));
     
-    // Update last spoken time with position-specific key
-    setLastSpokenTime(prev => ({
-      ...prev,
-      [objectKey]: now
-    }));
-  }, [speechEnabled, lastSpokenTime]);
+    console.log('🗣️ Voice alert:', message);
+  }, [speechEnabled]);
 
   // Generate spatial alerts
   const generateAlert = (detection: Detection): Alert | null => {
@@ -410,10 +549,13 @@ const ObjectDetectionCamera: React.FC = () => {
     let lastTime = Date.now();
     let frameCount = 0;
     let lastDetectionTime = 0;
-    const detectionInterval = 500; // Increased to 500ms for more stability
+    const detectionInterval = 300; // Optimized to 300ms for better responsiveness
     let currentDetections: Detection[] = [];
+    let isRunning = true;
 
     const detect = async () => {
+      if (!isRunning) return;
+      
       console.log('🔄 Detect function called');
       
       if (!videoRef.current || !canvasRef.current || !modelRef.current) {
@@ -422,7 +564,9 @@ const ObjectDetectionCamera: React.FC = () => {
           canvas: !!canvasRef.current, 
           model: !!modelRef.current,
         });
-        animationRef.current = requestAnimationFrame(detect);
+        if (isRunning) {
+          animationRef.current = requestAnimationFrame(detect);
+        }
         return;
       }
 
@@ -433,7 +577,9 @@ const ObjectDetectionCamera: React.FC = () => {
 
       if (!ctx) {
         console.log('❌ No canvas context');
-        animationRef.current = requestAnimationFrame(detect);
+        if (isRunning) {
+          animationRef.current = requestAnimationFrame(detect);
+        }
         return;
       }
 
@@ -443,18 +589,20 @@ const ObjectDetectionCamera: React.FC = () => {
           height: video.videoHeight,
           readyState: video.readyState
         });
-        animationRef.current = requestAnimationFrame(detect);
+        if (isRunning) {
+          animationRef.current = requestAnimationFrame(detect);
+        }
         return;
       }
 
-      // Set canvas size to match video
+      // Set canvas size to match video with performance optimization
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         console.log('📐 Canvas resized to:', canvas.width, 'x', canvas.height);
       }
 
-      // Clear canvas
+      // Clear canvas efficiently
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Debug: Draw a test rectangle to verify canvas is working
@@ -466,12 +614,15 @@ const ObjectDetectionCamera: React.FC = () => {
       ctx.fillText('TEST', 15, 35);
 
       try {
-        // Run object detection at controlled intervals
+        // Run object detection at controlled intervals with performance optimization
         if (currentTime - lastDetectionTime >= detectionInterval) {
+          console.log('🔍 Running object detection...');
+          
+          // Performance optimization: Use a smaller input size for detection if needed
           const predictions = await modelRef.current.detect(video);
           
-          // Higher threshold for more stable detection
-          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.2);
+          // Enhanced filtering with confidence threshold
+          const filteredPredictions = predictions.filter(prediction => prediction.score > 0.25);
           
           if (filteredPredictions.length > 0) {
             console.log('🎯 Objects detected:', filteredPredictions.map(p => `${p.class}:${Math.round(p.score*100)}%`));
@@ -490,13 +641,13 @@ const ObjectDetectionCamera: React.FC = () => {
             };
           });
 
-          // Update tracked objects
+          // Update tracked objects with enhanced stability
           const newTrackedObjects = trackObjects(currentDetections);
           setTrackedObjects(newTrackedObjects);
           
           // Update detections state with stable objects only
           const stableDetections = newTrackedObjects
-            .filter(obj => obj.stable && obj.confidence > 0.6)
+            .filter(obj => obj.stable && obj.confidence > 0.5)
             .map(obj => ({
               bbox: obj.bbox,
               class: obj.class,
@@ -507,9 +658,9 @@ const ObjectDetectionCamera: React.FC = () => {
           
           setDetections(stableDetections);
           
-          // Speak about stable, high-confidence tracked objects
+          // Enhanced voice alerts with better cooldown management
           newTrackedObjects.forEach(trackedObject => {
-            if (trackedObject.stable && trackedObject.confidence > 0.7) {
+            if (trackedObject.stable && trackedObject.confidence > 0.6) {
               speakDetection(trackedObject);
             }
           });
@@ -520,98 +671,173 @@ const ObjectDetectionCamera: React.FC = () => {
         // Draw tracked objects with enhanced visualization
         const objectsToDraw = focusMode 
           ? trackedObjects.filter(obj => obj.focused)
-          : trackedObjects.filter(obj => obj.stable && obj.confidence > 0.3);
+          : trackedObjects.filter(obj => obj.stable && obj.confidence > 0.25);
         
         console.log('🎨 Drawing objects:', objectsToDraw.length, 'objects to draw');
         
         objectsToDraw.forEach((trackedObject, index) => {
           const [x, y, width, height] = trackedObject.bbox;
+          const distance = trackedObject.distance || 0;
           
-          console.log(`🎨 Drawing object ${index}:`, trackedObject.class, 'at', x, y, width, height);
+          console.log(`🎨 Drawing object ${index}:`, trackedObject.class, 'at', x, y, width, height, 'distance:', distance);
           
-          // Different colors for focused vs stable objects
+          // Get color coding based on distance
+          const colors = getDistanceColor(distance);
+          
+          // Set drawing styles based on focus and distance
           if (trackedObject.focused) {
             ctx.strokeStyle = '#FFD700'; // Gold for focused objects
-            ctx.fillStyle = '#FFD700';
-            ctx.lineWidth = 3; // Thinner lines for cleaner look
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+            ctx.lineWidth = 4; // Thicker lines for focused objects
           } else {
-            ctx.strokeStyle = '#00FF00'; // Green for stable objects
-            ctx.fillStyle = '#00FF00';
-            ctx.lineWidth = 2; // Thin lines for clean appearance
+            ctx.strokeStyle = colors.stroke;
+            ctx.fillStyle = colors.fill;
+            ctx.lineWidth = 3; // Standard line width
           }
           
-          // Draw clean bounding box
+          // Draw enhanced bounding box with fill
+          ctx.fillRect(x, y, width, height);
           ctx.strokeRect(x, y, width, height);
           
-          // Draw minimal object information
-          const distance = Math.round(trackedObject.distance || 0);
+          // Enhanced object information display
           const confidence = Math.round(trackedObject.confidence * 100);
           const direction = trackedObject.direction;
+          const className = trackedObject.class;
           
-          // Create clean, minimal label
-          const label = `${trackedObject.class} ${distance}m ${direction}`;
+          // Create enhanced label with distance priority
+          const label = `${className} ${Math.round(distance)}m ${direction}`;
           
           // Calculate label dimensions
-          ctx.font = 'bold 14px Arial';
+          ctx.font = 'bold 16px Arial';
           const metrics = ctx.measureText(label);
-          const labelWidth = metrics.width + 12;
-          const labelHeight = 20;
+          const labelWidth = metrics.width + 16;
+          const labelHeight = 24;
           
-          // Position label above the object
+          // Position label above the object with smart positioning
           let labelX = x;
-          let labelY = y - labelHeight - 5;
+          let labelY = y - labelHeight - 8;
           
           // Adjust label position if it goes off-screen
           if (labelY < 0) {
-            labelY = y + height + 5; // Put label below object
+            labelY = y + height + 8; // Put label below object
           }
           if (labelX + labelWidth > canvas.width) {
-            labelX = canvas.width - labelWidth - 5; // Adjust for right edge
+            labelX = canvas.width - labelWidth - 8; // Adjust for right edge
+          }
+          if (labelX < 8) {
+            labelX = 8; // Adjust for left edge
           }
           
-          // Draw clean label background
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          // Draw enhanced label background with better contrast
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
           ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
           
-          // Draw label border
-          ctx.strokeStyle = trackedObject.focused ? '#FFD700' : '#00FF00';
-          ctx.lineWidth = 1;
+          // Draw label border with distance-based color
+          ctx.strokeStyle = colors.stroke;
+          ctx.lineWidth = 2;
           ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
           
-          // Draw label text
+          // Draw label text with better visibility
           ctx.fillStyle = '#FFFFFF';
-          ctx.fillText(label, labelX + 6, labelY + 14);
+          ctx.fillText(label, labelX + 8, labelY + 16);
           
-          // Draw subtle confidence indicator (small dot)
-          const dotSize = 4;
-          ctx.fillStyle = confidence >= 80 ? '#00FF00' : confidence >= 60 ? '#FFFF00' : '#FF0000';
+          // Draw distance priority indicator (colored dot with label)
+          const dotSize = 6;
+          const dotX = x + width - 12;
+          const dotY = y + 12;
+          
+          ctx.fillStyle = colors.stroke;
           ctx.beginPath();
-          ctx.arc(x + width - 8, y + 8, dotSize, 0, 2 * Math.PI);
+          ctx.arc(dotX, dotY, dotSize, 0, 2 * Math.PI);
           ctx.fill();
           
-          // Add focus button only when not in focus mode (minimal design)
+          // Add white border to dot for better visibility
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          
+          // Draw distance priority text
+          ctx.fillStyle = colors.stroke;
+          ctx.font = 'bold 10px Arial';
+          ctx.fillText(colors.label, dotX - 8, dotY + 4);
+          
+          // Draw confidence indicator bar
+          const barWidth = 40;
+          const barHeight = 4;
+          const barX = x + 8;
+          const barY = y + height - 12;
+          
+          // Background bar
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(barX, barY, barWidth, barHeight);
+          
+          // Confidence level bar
+          const confidenceWidth = (confidence / 100) * barWidth;
+          ctx.fillStyle = confidence >= 80 ? '#00FF00' : confidence >= 60 ? '#FFFF00' : '#FF0000';
+          ctx.fillRect(barX, barY, confidenceWidth, barHeight);
+          
+          // Add focus button only when not in focus mode (enhanced design)
           if (!focusMode) {
-            const buttonWidth = 60;
-            const buttonHeight = 20;
-            const buttonX = x + width - buttonWidth - 5;
-            const buttonY = y + height + 5;
+            const buttonWidth = 70;
+            const buttonHeight = 24;
+            const buttonX = x + width - buttonWidth - 8;
+            const buttonY = y + height + 8;
             
-            // Clean button design
-            ctx.fillStyle = 'rgba(0, 123, 255, 0.8)';
+            // Enhanced button design with gradient effect
+            const gradient = ctx.createLinearGradient(buttonX, buttonY, buttonX, buttonY + buttonHeight);
+            gradient.addColorStop(0, 'rgba(0, 123, 255, 0.9)');
+            gradient.addColorStop(1, 'rgba(0, 86, 179, 0.9)');
+            
+            ctx.fillStyle = gradient;
             ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
             
-            // Button text
+            // Button border
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
+            // Button text with icon
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 10px Arial';
-            ctx.fillText('FOCUS', buttonX + 12, buttonY + 14);
+            ctx.font = 'bold 11px Arial';
+            ctx.fillText('🎯 FOCUS', buttonX + 8, buttonY + 16);
           }
+          
+          // Draw direction indicator arrow for better spatial awareness
+          const arrowSize = 12;
+          const arrowX = x + width / 2;
+          const arrowY = y - 20;
+          
+          ctx.strokeStyle = colors.stroke;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          
+          if (direction === 'left') {
+            ctx.moveTo(arrowX + arrowSize/2, arrowY);
+            ctx.lineTo(arrowX - arrowSize/2, arrowY);
+            ctx.lineTo(arrowX - arrowSize/2 + 4, arrowY - 4);
+            ctx.moveTo(arrowX - arrowSize/2, arrowY);
+            ctx.lineTo(arrowX - arrowSize/2 + 4, arrowY + 4);
+          } else if (direction === 'right') {
+            ctx.moveTo(arrowX - arrowSize/2, arrowY);
+            ctx.lineTo(arrowX + arrowSize/2, arrowY);
+            ctx.lineTo(arrowX + arrowSize/2 - 4, arrowY - 4);
+            ctx.moveTo(arrowX + arrowSize/2, arrowY);
+            ctx.lineTo(arrowX + arrowSize/2 - 4, arrowY + 4);
+          } else { // center
+            ctx.moveTo(arrowX - arrowSize/2, arrowY);
+            ctx.lineTo(arrowX + arrowSize/2, arrowY);
+            ctx.moveTo(arrowX, arrowY - arrowSize/2);
+            ctx.lineTo(arrowX, arrowY + arrowSize/2);
+          }
+          
+          ctx.stroke();
         });
 
       } catch (error) {
         console.error('❌ Detection error:', error);
       }
 
-      // Calculate FPS
+      // Calculate FPS with performance monitoring
       frameCount++;
       if (currentTime - lastTime >= 1000) {
         setFps(frameCount);
@@ -620,8 +846,8 @@ const ObjectDetectionCamera: React.FC = () => {
         lastTime = currentTime;
       }
 
-      // Continue loop while component is still detecting
-      if (videoRef.current && canvasRef.current && modelRef.current) {
+      // Continue loop while component is still detecting and running
+      if (isRunning && videoRef.current && canvasRef.current && modelRef.current) {
         animationRef.current = requestAnimationFrame(detect);
       } else {
         console.log('🛑 Detection loop stopped - missing refs or model');
@@ -630,6 +856,14 @@ const ObjectDetectionCamera: React.FC = () => {
 
     console.log('🚀 Starting detection loop...');
     detect();
+    
+    // Return cleanup function
+    return () => {
+      isRunning = false;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
   }, [speakDetection, focusMode]); // Removed trackedObjects dependency to prevent recreation
 
   // Cleanup on unmount
