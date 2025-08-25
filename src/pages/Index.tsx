@@ -1,7 +1,7 @@
-import ObjectDetectionCamera from "@/components/ObjectDetectionCamera";
+import BasicObjectDetection from "@/components/BasicObjectDetection";
 
 const Index = () => {
-  return <ObjectDetectionCamera />;
+  return <BasicObjectDetection />;
 };
 
 export default Index;
