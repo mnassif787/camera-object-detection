@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Camera, Square } from 'lucide-react';
+import { Camera, Square, Volume2, VolumeX } from 'lucide-react';
 import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import useVoiceAlerts from '@/hooks/useVoiceAlerts';
+import SettingsPanel from './SettingsPanel';
 
 interface Detection {
   bbox: [number, number, number, number];
@@ -27,6 +29,19 @@ const BasicObjectDetection: React.FC = () => {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [fps, setFps] = useState(0);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.5);
+
+  // Voice Alerts
+  const {
+    isSupported: isVoiceSupported,
+    isSpeaking,
+    options: voiceAlertOptions,
+    initializeSpeech,
+    announceDetection,
+    announceSummary,
+    stopSpeaking,
+    updateOptions: updateVoiceOptions,
+    testVoice,
+  } = useVoiceAlerts();
 
   // Constants for distance estimation
   const FOCAL_LENGTH = 1000; // pixels
@@ -67,7 +82,7 @@ const BasicObjectDetection: React.FC = () => {
     'backpack': 0.5,    // 0.5 meters average height
   };
 
-  // Load COCO-SSD model
+  // Load COCO-SSD model and initialize voice alerts
   useEffect(() => {
     const loadModel = async () => {
       try {
@@ -90,7 +105,8 @@ const BasicObjectDetection: React.FC = () => {
     };
 
     loadModel();
-  }, []);
+    initializeSpeech();
+  }, [initializeSpeech]);
 
   // Distance estimation using focal length method
   const estimateDistance = (bbox: [number, number, number, number], className: string): number => {
@@ -208,6 +224,11 @@ const BasicObjectDetection: React.FC = () => {
         // Update detections state
         setDetections(newDetections);
         
+        // Announce detections via voice alerts
+        newDetections.forEach(detection => {
+          announceDetection(detection);
+        });
+        
         // Draw bounding boxes with distance-based colors
         newDetections.forEach(detection => {
           const [x, y, width, height] = detection.bbox;
@@ -256,6 +277,11 @@ const BasicObjectDetection: React.FC = () => {
         setFps(frameCount);
         frameCount = 0;
         lastTime = currentTime;
+        
+        // Periodic summary announcement (every 10 seconds)
+        if (frameCount % 10 === 0 && (voiceAlertOptions.alertType === 'summary' || voiceAlertOptions.alertType === 'both')) {
+          announceSummary(newDetections);
+        }
       }
 
       // Continue loop
@@ -266,14 +292,23 @@ const BasicObjectDetection: React.FC = () => {
 
     // Start the detection loop
     detect();
+    
+    // Announce summary if enabled
+    if (voiceAlertOptions.alertType === 'summary' || voiceAlertOptions.alertType === 'both') {
+      // Delay summary to avoid conflicts with immediate announcements
+      setTimeout(() => {
+        announceSummary(detections);
+      }, 2000);
+    }
   };
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopCamera();
+      stopSpeaking();
     };
-  }, []);
+  }, [stopSpeaking]);
 
   if (isLoading) {
     return (
@@ -310,6 +345,18 @@ const BasicObjectDetection: React.FC = () => {
             <span>Objects: {detections.length}</span>
             <span>Model: {modelLoaded ? "Ready" : "Loading"}</span>
             <span>Backend: {tf.getBackend()}</span>
+            <span className="flex items-center gap-1">
+              {isVoiceSupported ? (
+                voiceAlertOptions.enabled ? (
+                  <Volume2 className="w-4 h-4 text-green-500" />
+                ) : (
+                  <VolumeX className="w-4 h-4 text-muted-foreground" />
+                )
+              ) : (
+                <VolumeX className="w-4 h-4 text-red-500" />
+              )}
+              Voice
+            </span>
           </div>
         </div>
 
@@ -330,6 +377,17 @@ const BasicObjectDetection: React.FC = () => {
             <span>10% (More Objects)</span>
             <span>100% (Fewer Objects)</span>
           </div>
+        </div>
+
+        {/* Settings Panel */}
+        <div className="mt-4">
+          <SettingsPanel
+            voiceAlertOptions={voiceAlertOptions}
+            onVoiceAlertOptionsChange={updateVoiceOptions}
+            onTestVoice={testVoice}
+            isSpeaking={isSpeaking}
+            isVoiceSupported={isVoiceSupported}
+          />
         </div>
       </div>
 
