@@ -8,13 +8,13 @@
 - Basic object information display
 - Start/Stop camera controls
 
-## 🚧 Phase 1: Core Improvements
-- [ ] **Distance Estimation**: Add basic distance calculation using object size
-- [ ] **Direction Detection**: Show if objects are left, center, or right
-- [ ] **FPS Counter**: Display frames per second for performance monitoring
-- [ ] **Detection Confidence Filter**: Allow users to adjust confidence threshold
+## ✅ Phase 1: Core Improvements (COMPLETED)
+- [x] **Distance Estimation**: Add basic distance calculation using object size
+- [x] **Direction Detection**: Show if objects are left, center, or right
+- [x] **FPS Counter**: Display frames per second for performance monitoring
+- [x] **Detection Confidence Filter**: Allow users to adjust confidence threshold
 
-## 🚧 Phase 2: User Experience
+## 🚧 Phase 2: User Experience (IN PROGRESS)
 - [ ] **Voice Alerts**: Audio notifications for detected objects
 - [ ] **Color-coded Bounding Boxes**: Different colors based on distance/direction
 - [ ] **Detection History**: Log of recent detections
@@ -48,4 +48,12 @@
 
 ## Current Status
 - **Basic Object Detection**: ✅ Complete
-- **Next Feature**: Distance Estimation
+- **Phase 1 Features**: ✅ Complete
+- **Next Feature**: Voice Alerts (Phase 2)
+
+## Phase 1 Achievements
+- **Distance Estimation**: Objects now show estimated distance in meters
+- **Direction Detection**: Objects are categorized as Left/Center/Right
+- **FPS Counter**: Real-time performance monitoring
+- **Confidence Filter**: Adjustable detection sensitivity (10%-100%)
+- **Enhanced UI**: Color-coded bounding boxes and comprehensive labels
