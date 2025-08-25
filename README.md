@@ -8,6 +8,8 @@ A mobile proof-of-concept application that performs real-time object detection v
 📏 **Distance Estimation** - Calculates approximate distance based on object size  
 🧭 **Direction Detection** - Determines left/center/right positioning  
 🚨 **Spatial Alerts** - Real-time notifications like "person approaching from right ~25m"  
+🔊 **Voice Alerts** - Configurable audio announcements for detected objects  
+⚙️ **Settings Panel** - Comprehensive configuration interface  
 📱 **Mobile Optimized** - Responsive design with Capacitor mobile integration  
 ⚡ **High Performance** - Optimized for mobile devices with FPS monitoring  
 
@@ -90,6 +92,13 @@ To run on physical device or emulator:
 - Real-time FPS monitoring
 - Optimized canvas rendering
 - Mobile-first responsive design
+
+### Voice Alerts
+- Configurable audio notifications for detected objects
+- Multiple alert types: immediate, summary, or both
+- Customizable voice settings: volume, rate, pitch
+- Smart announcements with distance and direction information
+- Accessibility-focused for visually impaired users
 
 ## Camera Permissions
 
